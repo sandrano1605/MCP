@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "windows-capture": {
+      "type": "stdio",
+      "command": "C:/ruta/a/.venv/Scripts/python.exe",
+      "args": [
+        "C:/ruta/al/repo/MCP/servers/windows-capture/server.py"
+      ]
+    }
+  }
+}
