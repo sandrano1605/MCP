@@ -18,6 +18,8 @@ def test_server_import_registers_tools_without_type_errors():
         "artel_fabric_list_workspaces",
         "artel_fabric_list_items",
         "artel_fabric_get_item",
+        "artel_fabric_get_report_definition",
+        "artel_fabric_get_semantic_model_definition",
         "artel_powerplatform_request",
     }
     assert required <= tools
