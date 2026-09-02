@@ -20,6 +20,47 @@ _TEXT_EXTENSIONS = (
 )
 
 
+def decode_definition_parts(
+    response: dict[str, Any],
+    *,
+    max_total_bytes: int = 25_000_000,
+) -> tuple[str | None, dict[str, bytes]]:
+    """Decodifica partes InlineBase64 para consumo interno del MCP.
+
+    Esta función no es una tool MCP: los bytes quedan dentro del proceso y se usan
+    por inspectores PBIR/TMDL antes de devolver resultados compactos al LLM.
+    """
+
+    definition = response.get("definition")
+    if not isinstance(definition, dict):
+        raise DefinitionDecodeError("Fabric no devolvió un objeto 'definition' válido.")
+
+    raw_parts = definition.get("parts")
+    if not isinstance(raw_parts, list):
+        raise DefinitionDecodeError("Fabric no devolvió una lista 'parts' válida.")
+
+    decoded_parts: dict[str, bytes] = {}
+    total_bytes = 0
+    for raw_part in raw_parts:
+        if not isinstance(raw_part, dict):
+            continue
+        path = str(raw_part.get("path") or "")
+        payload_type = str(raw_part.get("payloadType") or "")
+        payload = raw_part.get("payload")
+        if not path or payload_type != "InlineBase64" or not isinstance(payload, str):
+            raise DefinitionDecodeError("La definición contiene una parte no soportada o incompleta.")
+        if path in decoded_parts:
+            raise DefinitionDecodeError(f"La definición contiene una ruta duplicada: '{path}'.")
+
+        decoded = _decode_inline_base64(payload, path)
+        total_bytes += len(decoded)
+        if total_bytes > max_total_bytes:
+            raise DefinitionDecodeError("La definición excede el límite seguro de 25 MB decodificados.")
+        decoded_parts[path] = decoded
+
+    return definition.get("format"), decoded_parts
+
+
 def summarize_definition(
     response: dict[str, Any],
     *,
@@ -36,36 +77,19 @@ def summarize_definition(
     if max_content_chars < 0 or max_content_chars > 200_000:
         raise ValueError("max_content_chars debe estar entre 0 y 200000.")
 
-    definition = response.get("definition")
-    if not isinstance(definition, dict):
-        raise DefinitionDecodeError("Fabric no devolvió un objeto 'definition' válido.")
-
-    raw_parts = definition.get("parts")
-    if not isinstance(raw_parts, list):
-        raise DefinitionDecodeError("Fabric no devolvió una lista 'parts' válida.")
+    definition_format, decoded_parts = decode_definition_parts(
+        response,
+        max_total_bytes=max_total_bytes,
+    )
 
     parts: list[dict[str, Any]] = []
-    total_bytes = 0
     remaining_chars = max_content_chars
+    total_bytes = sum(len(content) for content in decoded_parts.values())
 
-    for raw_part in raw_parts:
-        if not isinstance(raw_part, dict):
-            continue
-        path = str(raw_part.get("path") or "")
-        payload_type = str(raw_part.get("payloadType") or "")
-        payload = raw_part.get("payload")
-        if not path or payload_type != "InlineBase64" or not isinstance(payload, str):
-            raise DefinitionDecodeError("La definición contiene una parte no soportada o incompleta.")
-
-        decoded = _decode_inline_base64(payload, path)
-
-        total_bytes += len(decoded)
-        if total_bytes > max_total_bytes:
-            raise DefinitionDecodeError("La definición excede el límite seguro de 25 MB decodificados.")
-
+    for path, decoded in decoded_parts.items():
         item: dict[str, Any] = {
             "path": path,
-            "payload_type": payload_type,
+            "payload_type": "InlineBase64",
             "bytes": len(decoded),
             "textual": _is_textual_path(path),
         }
@@ -92,12 +116,11 @@ def summarize_definition(
 
         parts.append(item)
 
-    paths = [part["path"] for part in parts]
     return {
-        "format": definition.get("format"),
+        "format": definition_format,
         "part_count": len(parts),
         "total_decoded_bytes": total_bytes,
-        "paths": paths,
+        "paths": list(decoded_parts),
         "parts": parts,
         "content_included": include_content,
         "content_budget_chars": max_content_chars,
