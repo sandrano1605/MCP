@@ -39,6 +39,10 @@ TEXT_SUFFIXES = {
     ".tmdl",
     ".pbip",
     ".pbir",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".properties",
 }
 
 
@@ -48,6 +52,11 @@ def _iter_files(root: Path) -> Iterable[Path]:
             continue
         if path.is_file():
             yield path
+
+
+def _is_text_candidate(path: Path) -> bool:
+    name = path.name.lower()
+    return path.suffix.lower() in TEXT_SUFFIXES or name == ".env" or name.startswith(".env.")
 
 
 def inspect_project(project_path: Path) -> dict[str, Any]:
@@ -123,7 +132,7 @@ def scan_for_embedded_secrets(
     skipped_large_files = 0
 
     for path in _iter_files(project_path):
-        if path.suffix.lower() not in TEXT_SUFFIXES:
+        if not _is_text_candidate(path):
             continue
         try:
             if path.stat().st_size > max_file_bytes:
