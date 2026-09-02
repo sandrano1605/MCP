@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Literal
 
@@ -244,7 +242,7 @@ async def artel_powerplatform_request(
     if not decision.allowed:
         return ToolResult(
             ok=True,
-            status="DRY_RUN" if decision.dry_run else "BLOCKED",
+            status="DRY_RUN" if decision.reason == "DRY_RUN_ENABLED" else "BLOCKED",
             operation="artel_powerplatform_request",
             data={
                 "would_call": method,
