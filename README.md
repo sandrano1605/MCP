@@ -1,93 +1,116 @@
 # MCP
 
-Repositorio base para servidores MCP utilitarios, con foco en flujos reales de Power BI Desktop y otras apps de Windows.
+Repositorio de servidores MCP reutilizables para automatización, auditoría y evidencia técnica.
 
-## Estado actual
+## Principios
 
-Servidor disponible:
+- `read-first`: inspeccionar antes de modificar.
+- seguridad por defecto: escrituras bloqueadas salvo habilitación y confirmación explícitas.
+- herramientas pequeñas y descubribles para que distintos clientes MCP/LLM puedan utilizarlas.
+- resultados estructurados y testeables.
+- API/formatos oficiales antes que automatización visual cuando sea posible.
+- evidencia runtime antes de declarar una operación validada.
 
-- `windows-capture`
+## Servidores
 
-Ruta:
+### `windows-capture`
 
-- [servers/windows-capture](C:\Users\alonso.moya\OneDrive - ARTEL S.A\Escritorio\Modelo datos power BI\power-MCP\MCP\servers\windows-capture)
+Servidor Windows orientado a captura determinística de ventanas y revisión visual de Power BI Desktop.
 
-## Objetivo del repo
+Ruta relativa:
 
-Separar MCPs utilitarios del repo operativo principal de Power BI para:
+- `servers/windows-capture/`
 
-- mantener servidores reutilizables,
-- probar capacidades nuevas en un repo limpio,
-- documentar integración antes de incrustarlas en otros MCP.
+Capacidades principales:
 
-## Servidor actual: `windows-capture`
+- listar ventanas;
+- activar una ventana como best-effort;
+- capturar una ventana o región;
+- wrappers para Power BI Desktop.
 
-Capacidades:
+### `artel-powerplatform-mcp`
 
-- listar ventanas de Windows,
-- activar una ventana,
-- capturar una ventana específica,
-- capturar una región puntual,
-- wrappers orientados a Power BI Desktop.
+Servidor Python orientado a Power BI, PBIP y Power Platform.
 
-Tools:
+Código:
 
-- `windows_list_windows`
-- `windows_activate_window`
-- `windows_capture_window`
-- `windows_capture_region`
-- `windows_get_foreground_window`
-- `powerbi_list_desktop_windows`
-- `powerbi_activate_report_window`
-- `powerbi_capture_report_window`
+- `src/artel_powerplatform_mcp/`
 
-## Estructura
+Estado V1.1:
 
-- `servers/windows-capture/server.py`
-- `servers/windows-capture/README.md`
-- `servers/windows-capture/requirements.txt`
-- `docs/POWERBI_INTEGRATION.md`
-- `.mcp.json.example`
-- `AGENTS.md`
+- autodiscovery de capacidades;
+- health check sin revelar secretos;
+- inventario local PBIP/TMDL/PBIR/DAX;
+- validación de blueprint S510;
+- scanner de indicadores de secretos con salida redactada;
+- Power BI ExecuteQueries;
+- cliente Power Platform configurable;
+- guardas `dry_run`, `confirm` y `ARTEL_ALLOW_WRITES`;
+- respuestas MCP estructuradas;
+- pruebas unitarias y CI.
 
-## Requisitos
-
-- Windows
-- Python 3.10+
-- `mcp`
-- `pywin32`
-
-Instalación sugerida:
+## Instalación del servidor ARTEL
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r .\servers\windows-capture\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
+
+Configura variables a partir de `.env.example`. No guardes `.env` reales en Git.
 
 ## Ejecución
 
 ```powershell
-.\.venv\Scripts\python.exe .\servers\windows-capture\server.py
+artel-powerplatform-mcp
 ```
 
-## Prueba rápida
+Las primeras tools recomendadas para cualquier cliente MCP son:
+
+1. `artel_list_capabilities`
+2. `artel_health`
+3. `artel_inspect_bi_project`
+4. `artel_scan_embedded_secrets`
+
+## Política de escritura
+
+Por defecto:
+
+```text
+ARTEL_ALLOW_WRITES=false
+```
+
+Las operaciones mutantes soportadas requieren simultáneamente:
+
+```text
+dry_run=false
+confirm=true
+ARTEL_ALLOW_WRITES=true
+```
+
+`DELETE` permanece bloqueado en esta etapa.
+
+## Pruebas
 
 ```powershell
-.\.venv\Scripts\python.exe .\servers\windows-capture\server.py --self-test --title "analisis_disponibilidad"
+python -m compileall -q src
+pytest
 ```
 
-## Configuración MCP
+GitHub Actions ejecuta las pruebas en Python 3.11 y 3.12.
 
-Ejemplo:
+## Integración
 
-- [.mcp.json.example](C:\Users\alonso.moya\OneDrive - ARTEL S.A\Escritorio\Modelo datos power BI\power-MCP\MCP\.mcp.json.example)
+La estrategia recomendada es mantener servidores base independientes y exponer wrappers de dominio sobre capacidades estabilizadas. Los consumidores no deberían necesitar conocer si una operación se resuelve mediante Python local, REST, Fabric, PAC CLI o automatización visual.
 
-## Integración futura
+## Seguridad
 
-Este repo deja el servidor aislado y estable.
+Este repositorio no debe contener:
 
-La incrustación posterior recomendada es:
+- tokens;
+- contraseñas;
+- client secrets;
+- cookies;
+- connection strings con credenciales;
+- payloads productivos sensibles.
 
-1. probar el MCP aquí,
-2. usarlo desde `.mcp.json` del workspace,
-3. si la capacidad se consolida, agregar wrappers o “superpoderes” dentro de un MCP de dominio, por ejemplo uno de Power BI.
+Si el repositorio se mantiene público, no incorporar lógica operacional propietaria que no deba exponerse. Para configuraciones y playbooks internos, preferir un repositorio privado o una capa de configuración separada.
