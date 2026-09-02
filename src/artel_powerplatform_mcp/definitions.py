@@ -57,10 +57,7 @@ def summarize_definition(
         if not path or payload_type != "InlineBase64" or not isinstance(payload, str):
             raise DefinitionDecodeError("La definición contiene una parte no soportada o incompleta.")
 
-        try:
-            decoded = base64.b64decode(payload, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise DefinitionDecodeError(f"Payload Base64 inválido en la parte '{path}'.") from exc
+        decoded = _decode_inline_base64(payload, path)
 
         total_bytes += len(decoded)
         if total_bytes > max_total_bytes:
@@ -106,6 +103,15 @@ def summarize_definition(
         "content_budget_chars": max_content_chars,
         "content_budget_remaining": remaining_chars,
     }
+
+
+def _decode_inline_base64(payload: str, path: str) -> bytes:
+    normalized = payload.strip()
+    padding = "=" * ((4 - len(normalized) % 4) % 4)
+    try:
+        return base64.b64decode(normalized + padding, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise DefinitionDecodeError(f"Payload Base64 inválido en la parte '{path}'.") from exc
 
 
 def _is_textual_path(path: str) -> bool:
