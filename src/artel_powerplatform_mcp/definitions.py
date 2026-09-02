@@ -29,8 +29,8 @@ def summarize_definition(
 ) -> dict[str, Any]:
     """Convierte una respuesta getDefinition en un contrato compacto y seguro.
 
-    Por defecto no devuelve el payload decodificado para evitar consumir contexto del LLM.
-    Cuando include_content=True solo incluye texto UTF-8 de partes conocidas y lo trunca.
+    Por defecto no devuelve payload decodificado. Cuando include_content=True,
+    max_content_chars funciona como presupuesto TOTAL compartido entre todas las partes.
     """
 
     if max_content_chars < 0 or max_content_chars > 200_000:
@@ -46,6 +46,8 @@ def summarize_definition(
 
     parts: list[dict[str, Any]] = []
     total_bytes = 0
+    remaining_chars = max_content_chars
+
     for raw_part in raw_parts:
         if not isinstance(raw_part, dict):
             continue
@@ -71,14 +73,16 @@ def summarize_definition(
             "textual": _is_textual_path(path),
         }
 
-        if include_content and item["textual"]:
+        if include_content and item["textual"] and remaining_chars > 0:
             try:
                 text = decoded.decode("utf-8")
             except UnicodeDecodeError:
                 item["textual"] = False
             else:
-                item["content"] = text[:max_content_chars]
-                item["content_truncated"] = len(text) > max_content_chars
+                budget = min(len(text), remaining_chars)
+                item["content"] = text[:budget]
+                item["content_truncated"] = len(text) > budget
+                remaining_chars -= budget
                 if path.lower().endswith((".json", ".pbir", ".pbism")):
                     try:
                         json.loads(text)
@@ -86,6 +90,8 @@ def summarize_definition(
                         item["json_valid"] = False
                     else:
                         item["json_valid"] = True
+        elif include_content and item["textual"]:
+            item["content_omitted_due_to_budget"] = True
 
         parts.append(item)
 
@@ -97,6 +103,8 @@ def summarize_definition(
         "paths": paths,
         "parts": parts,
         "content_included": include_content,
+        "content_budget_chars": max_content_chars,
+        "content_budget_remaining": remaining_chars,
     }
 
 
