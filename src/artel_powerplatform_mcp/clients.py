@@ -38,6 +38,13 @@ def _validate_dataset_id(dataset_id: str) -> str:
     return _validate_uuid(dataset_id, "dataset_id")
 
 
+def _parse_retry_after(value: str | None, default: float = 0.25) -> float:
+    try:
+        return max(0.0, float(value)) if value is not None else default
+    except ValueError:
+        return default
+
+
 class PowerBIClient:
     def __init__(
         self,
@@ -73,7 +80,7 @@ class PowerBIClient:
 
 
 class FabricClient:
-    """Cliente read-only para descubrimiento de Microsoft Fabric."""
+    """Cliente Fabric read-only para discovery y recuperación de definiciones públicas."""
 
     def __init__(
         self,
@@ -198,6 +205,104 @@ class FabricClient:
             client=self.client,
         )
 
+    async def get_report_definition(
+        self,
+        workspace_id: str,
+        report_id: str,
+        *,
+        definition_format: str = "PBIR",
+        max_polls: int = 20,
+    ) -> dict[str, Any]:
+        workspace_id = _validate_uuid(workspace_id, "workspace_id")
+        report_id = _validate_uuid(report_id, "report_id")
+        if definition_format not in {"PBIR", "PBIR-Legacy"}:
+            raise ValueError("definition_format debe ser PBIR o PBIR-Legacy.")
+        return await self._get_definition(
+            f"/workspaces/{workspace_id}/reports/{report_id}/getDefinition",
+            definition_format=definition_format,
+            max_polls=max_polls,
+        )
+
+    async def get_semantic_model_definition(
+        self,
+        workspace_id: str,
+        semantic_model_id: str,
+        *,
+        definition_format: str = "TMDL",
+        max_polls: int = 20,
+    ) -> dict[str, Any]:
+        workspace_id = _validate_uuid(workspace_id, "workspace_id")
+        semantic_model_id = _validate_uuid(semantic_model_id, "semantic_model_id")
+        if definition_format not in {"TMDL", "TMSL"}:
+            raise ValueError("definition_format debe ser TMDL o TMSL.")
+        return await self._get_definition(
+            f"/workspaces/{workspace_id}/semanticModels/{semantic_model_id}/getDefinition",
+            definition_format=definition_format,
+            max_polls=max_polls,
+        )
+
+    async def _get_definition(
+        self,
+        path: str,
+        *,
+        definition_format: str,
+        max_polls: int,
+    ) -> dict[str, Any]:
+        token = self._require_token()
+        if max_polls < 1 or max_polls > 60:
+            raise ValueError("max_polls debe estar entre 1 y 60.")
+
+        response = await _request_response(
+            "POST",
+            f"{self.base_url}{path}",
+            token,
+            params={"format": definition_format},
+            client=self.client,
+        )
+        if response.status_code == 200:
+            result = _response_json(response)
+            if not isinstance(result, dict):
+                raise ApiRequestError("Fabric devolvió una definición con formato inesperado.")
+            return result
+
+        if response.status_code != 202:
+            raise ApiRequestError(f"Fabric devolvió HTTP {response.status_code} al solicitar la definición.")
+
+        operation_id = response.headers.get("x-ms-operation-id")
+        if not operation_id:
+            raise ApiRequestError("Fabric inició una operación larga sin x-ms-operation-id.")
+        operation_id = _validate_uuid(operation_id, "operation_id")
+        retry_after = _parse_retry_after(response.headers.get("Retry-After"), 1.0)
+
+        for _ in range(max_polls):
+            await asyncio.sleep(min(retry_after, 10.0))
+            state_response = await _request_response(
+                "GET",
+                f"{self.base_url}/operations/{operation_id}",
+                token,
+                client=self.client,
+            )
+            state = _response_json(state_response)
+            if not isinstance(state, dict):
+                raise ApiRequestError("Fabric devolvió un estado LRO inesperado.")
+            status = str(state.get("status") or "")
+            if status == "Succeeded":
+                result_response = await _request_response(
+                    "GET",
+                    f"{self.base_url}/operations/{operation_id}/result",
+                    token,
+                    client=self.client,
+                )
+                result = _response_json(result_response)
+                if not isinstance(result, dict):
+                    raise ApiRequestError("Fabric devolvió un resultado LRO inesperado.")
+                return result
+            if status in {"Failed", "Cancelled"}:
+                raise ApiRequestError(f"Fabric informó que la operación de definición terminó en estado {status}.")
+            retry_after = _parse_retry_after(state_response.headers.get("Retry-After"), retry_after or 1.0)
+
+        raise ApiRequestError("La operación Fabric no finalizó dentro del máximo de sondeos permitido.")
+
 
 class PowerPlatformClient:
     def __init__(
@@ -227,7 +332,7 @@ class PowerPlatformClient:
         )
 
 
-async def _request_json(
+async def _request_response(
     method: str,
     url: str,
     token: str,
@@ -236,7 +341,7 @@ async def _request_json(
     params: dict[str, Any] | None = None,
     client: httpx.AsyncClient | None = None,
     max_attempts: int = 3,
-) -> Any:
+) -> httpx.Response:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
@@ -264,38 +369,63 @@ async def _request_json(
                 continue
 
             if response.status_code in RETRYABLE_STATUS and attempt < max_attempts:
-                retry_after = response.headers.get("Retry-After")
-                try:
-                    delay = float(retry_after) if retry_after else 0.25 * (2 ** (attempt - 1))
-                except ValueError:
-                    delay = 0.25 * (2 ** (attempt - 1))
+                delay = _parse_retry_after(
+                    response.headers.get("Retry-After"),
+                    0.25 * (2 ** (attempt - 1)),
+                )
                 await asyncio.sleep(min(delay, 5.0))
                 continue
 
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                status = exc.response.status_code
-                if status == 401:
-                    raise ApiRequestError("Autenticación rechazada por la API; renueva el token delegado.") from None
-                if status == 403:
-                    raise ApiRequestError("Permiso insuficiente para esta operación.") from None
-                if status == 404:
-                    raise ApiRequestError(
-                        "Recurso no encontrado; verifica entorno, workspace, dataset, item o flow ID."
-                    ) from None
-                if status == 429:
-                    raise ApiRequestError("Límite de solicitudes alcanzado después de reintentos.") from None
-                raise ApiRequestError(f"La API devolvió HTTP {status}.") from None
-
-            if not response.content:
-                return {"status_code": response.status_code}
-            try:
-                return response.json()
-            except ValueError as exc:
-                raise ApiRequestError("La API respondió contenido que no es JSON válido.") from exc
+            _raise_api_error(response)
+            return response
 
         raise ApiRequestError("La solicitud agotó los reintentos configurados.")
     finally:
         if owns_client:
             await active_client.aclose()
+
+
+def _raise_api_error(response: httpx.Response) -> None:
+    if response.status_code < 400:
+        return
+    status = response.status_code
+    if status == 401:
+        raise ApiRequestError("Autenticación rechazada por la API; renueva el token delegado.")
+    if status == 403:
+        raise ApiRequestError("Permiso insuficiente para esta operación.")
+    if status == 404:
+        raise ApiRequestError("Recurso no encontrado; verifica entorno, workspace, dataset, item o flow ID.")
+    if status == 429:
+        raise ApiRequestError("Límite de solicitudes alcanzado después de reintentos.")
+    raise ApiRequestError(f"La API devolvió HTTP {status}.")
+
+
+def _response_json(response: httpx.Response) -> Any:
+    if not response.content:
+        return {"status_code": response.status_code}
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise ApiRequestError("La API respondió contenido que no es JSON válido.") from exc
+
+
+async def _request_json(
+    method: str,
+    url: str,
+    token: str,
+    *,
+    json: Any = None,
+    params: dict[str, Any] | None = None,
+    client: httpx.AsyncClient | None = None,
+    max_attempts: int = 3,
+) -> Any:
+    response = await _request_response(
+        method,
+        url,
+        token,
+        json=json,
+        params=params,
+        client=client,
+        max_attempts=max_attempts,
+    )
+    return _response_json(response)

@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from .auth import AuthBroker
 from .clients import FabricClient, PowerBIClient, PowerPlatformClient
 from .config import load_settings
+from .definitions import summarize_definition
 from .guards import evaluate_mutation
 from .local_audit import inspect_project, scan_for_embedded_secrets, validate_blueprint
 from .models import ToolResult, ok_result
@@ -26,6 +27,8 @@ CAPABILITIES = [
     {"tool": "artel_fabric_list_workspaces", "mode": "cloud-read", "purpose": "Descubrir workspaces Fabric accesibles para la identidad actual."},
     {"tool": "artel_fabric_list_items", "mode": "cloud-read", "purpose": "Listar items de un workspace Fabric."},
     {"tool": "artel_fabric_get_item", "mode": "cloud-read", "purpose": "Obtener metadatos de un item Fabric."},
+    {"tool": "artel_fabric_get_report_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición PBIR de un Report Fabric."},
+    {"tool": "artel_fabric_get_semantic_model_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición TMDL de un Semantic Model Fabric."},
     {"tool": "artel_powerplatform_request", "mode": "guarded-cloud", "purpose": "Invocar una API Power Platform configurada; escrituras requieren triple guarda."},
 ]
 
@@ -37,6 +40,11 @@ def _project_path(value: str | None) -> Path:
     return path
 
 
+def _fabric_client() -> FabricClient:
+    settings = load_settings()
+    return FabricClient(settings.fabric_api_base_url, AUTH_BROKER.get_token("fabric"))
+
+
 @mcp.tool(
     name="artel_list_capabilities",
     annotations={"title": "Descubrir capacidades ARTEL MCP", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
@@ -46,7 +54,7 @@ async def artel_list_capabilities() -> ToolResult:
     return ok_result(
         "artel_list_capabilities",
         status="PASS",
-        data={"server": "artel_powerplatform_mcp", "contract_version": "1.2", "capabilities": CAPABILITIES},
+        data={"server": "artel_powerplatform_mcp", "contract_version": "1.3", "capabilities": CAPABILITIES},
     )
 
 
@@ -173,11 +181,7 @@ async def artel_powerbi_execute_dax(query: str, dataset_id: str | None = None) -
 )
 async def artel_fabric_list_workspaces(roles: str | None = None, max_pages: int = 20) -> ToolResult:
     """Lista workspaces Fabric accesibles. Requiere Workspace.Read.All o permiso equivalente."""
-    settings = load_settings()
-    result = await FabricClient(
-        settings.fabric_api_base_url,
-        AUTH_BROKER.get_token("fabric"),
-    ).list_workspaces(roles=roles, max_pages=max_pages)
+    result = await _fabric_client().list_workspaces(roles=roles, max_pages=max_pages)
     return ok_result("artel_fabric_list_workspaces", status="PASS", data=result)
 
 
@@ -187,11 +191,7 @@ async def artel_fabric_list_workspaces(roles: str | None = None, max_pages: int 
 )
 async def artel_fabric_list_items(workspace_id: str, item_type: str | None = None, max_pages: int = 20) -> ToolResult:
     """Lista items de un workspace Fabric. Puede filtrar por tipo, por ejemplo Report o SemanticModel."""
-    settings = load_settings()
-    result = await FabricClient(
-        settings.fabric_api_base_url,
-        AUTH_BROKER.get_token("fabric"),
-    ).list_items(workspace_id, item_type=item_type, max_pages=max_pages)
+    result = await _fabric_client().list_items(workspace_id, item_type=item_type, max_pages=max_pages)
     return ok_result("artel_fabric_list_items", status="PASS", data=result)
 
 
@@ -201,12 +201,70 @@ async def artel_fabric_list_items(workspace_id: str, item_type: str | None = Non
 )
 async def artel_fabric_get_item(workspace_id: str, item_id: str) -> ToolResult:
     """Obtiene metadatos de un item Fabric sin modificarlo."""
-    settings = load_settings()
-    result = await FabricClient(
-        settings.fabric_api_base_url,
-        AUTH_BROKER.get_token("fabric"),
-    ).get_item(workspace_id, item_id)
+    result = await _fabric_client().get_item(workspace_id, item_id)
     return ok_result("artel_fabric_get_item", status="PASS", data={"item": result})
+
+
+@mcp.tool(
+    name="artel_fabric_get_report_definition",
+    annotations={"title": "Obtener definición PBIR Fabric", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+async def artel_fabric_get_report_definition(
+    workspace_id: str,
+    report_id: str,
+    definition_format: Literal["PBIR", "PBIR-Legacy"] = "PBIR",
+    include_content: bool = False,
+    max_content_chars: int = 20_000,
+    max_polls: int = 20,
+) -> ToolResult:
+    """Recupera la definición pública de un Report. Por defecto devuelve manifiesto sin payload para ahorrar contexto."""
+    response = await _fabric_client().get_report_definition(
+        workspace_id,
+        report_id,
+        definition_format=definition_format,
+        max_polls=max_polls,
+    )
+    definition = summarize_definition(
+        response,
+        include_content=include_content,
+        max_content_chars=max_content_chars,
+    )
+    return ok_result(
+        "artel_fabric_get_report_definition",
+        status="PASS",
+        data={"workspace_id": workspace_id, "report_id": report_id, "definition": definition},
+    )
+
+
+@mcp.tool(
+    name="artel_fabric_get_semantic_model_definition",
+    annotations={"title": "Obtener definición TMDL Fabric", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+async def artel_fabric_get_semantic_model_definition(
+    workspace_id: str,
+    semantic_model_id: str,
+    definition_format: Literal["TMDL", "TMSL"] = "TMDL",
+    include_content: bool = False,
+    max_content_chars: int = 20_000,
+    max_polls: int = 20,
+) -> ToolResult:
+    """Recupera la definición pública de un Semantic Model. Por defecto devuelve manifiesto sin payload."""
+    response = await _fabric_client().get_semantic_model_definition(
+        workspace_id,
+        semantic_model_id,
+        definition_format=definition_format,
+        max_polls=max_polls,
+    )
+    definition = summarize_definition(
+        response,
+        include_content=include_content,
+        max_content_chars=max_content_chars,
+    )
+    return ok_result(
+        "artel_fabric_get_semantic_model_definition",
+        status="PASS",
+        data={"workspace_id": workspace_id, "semantic_model_id": semantic_model_id, "definition": definition},
+    )
 
 
 @mcp.tool(

@@ -7,6 +7,8 @@ from pathlib import Path
 FABRIC_DEFAULT_SCOPES = (
     "https://api.fabric.microsoft.com/Workspace.Read.All",
     "https://api.fabric.microsoft.com/Item.Read.All",
+    "https://api.fabric.microsoft.com/Report.ReadWrite.All",
+    "https://api.fabric.microsoft.com/SemanticModel.ReadWrite.All",
 )
 POWERBI_DEFAULT_SCOPES = (
     "https://analysis.windows.net/powerbi/api/Dataset.Read.All",

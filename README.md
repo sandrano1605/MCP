@@ -10,6 +10,7 @@ Repositorio de servidores MCP reutilizables para automatización, auditoría y e
 - resultados estructurados y testeables.
 - API/formatos oficiales antes que automatización visual cuando sea posible.
 - evidencia runtime antes de declarar una operación validada.
+- minimizar contexto: manifests primero, contenido completo solo bajo demanda.
 
 ## Servidores
 
@@ -30,20 +31,28 @@ Capacidades principales:
 
 ### `artel-powerplatform-mcp`
 
-Servidor Python orientado a Power BI, PBIP y Power Platform.
+Servidor Python orientado a Power BI, PBIP, Microsoft Fabric y Power Platform.
 
 Código:
 
 - `src/artel_powerplatform_mcp/`
 
-Estado V1.1:
+Estado V1.3:
 
 - autodiscovery de capacidades;
 - health check sin revelar secretos;
+- Auth Broker para Fabric, Power BI y Power Platform;
+- Microsoft Entra Device Code Flow con tokens solo en memoria;
 - inventario local PBIP/TMDL/PBIR/DAX;
 - validación de blueprint S510;
 - scanner de indicadores de secretos con salida redactada;
 - Power BI ExecuteQueries;
+- Fabric discovery: workspaces e items;
+- Fabric Definition Engine read-only para Reports y Semantic Models;
+- soporte de respuestas Fabric LRO `202 Accepted` + polling;
+- decodificación segura `InlineBase64` con o sin padding;
+- manifiesto PBIR/TMDL compacto por defecto;
+- contenido textual opt-in con presupuesto total de caracteres;
 - cliente Power Platform configurable;
 - guardas `dry_run`, `confirm` y `ARTEL_ALLOW_WRITES`;
 - respuestas MCP estructuradas;
@@ -68,8 +77,39 @@ Las primeras tools recomendadas para cualquier cliente MCP son:
 
 1. `artel_list_capabilities`
 2. `artel_health`
-3. `artel_inspect_bi_project`
-4. `artel_scan_embedded_secrets`
+3. `artel_auth_status`
+4. `artel_inspect_bi_project`
+5. `artel_scan_embedded_secrets`
+
+## Fabric Definition Engine
+
+Tools principales:
+
+- `artel_fabric_list_workspaces`
+- `artel_fabric_list_items`
+- `artel_fabric_get_item`
+- `artel_fabric_get_report_definition`
+- `artel_fabric_get_semantic_model_definition`
+
+La recuperación de definiciones usa las APIs oficiales `getDefinition`. Aunque la operación sea de lectura, Microsoft exige permisos/scopes de lectura-escritura para estas APIs. El servidor no expone ninguna tool de `updateDefinition` en V1.3 y `ARTEL_ALLOW_WRITES=false` permanece como default.
+
+Para ahorrar tokens/contexto, las tools de definición devuelven por defecto:
+
+```text
+format
+part_count
+total_decoded_bytes
+paths
+parts: path + bytes + tipo
+```
+
+El contenido PBIR/TMDL solo se incluye cuando se solicita explícitamente:
+
+```text
+include_content=true
+```
+
+El presupuesto `max_content_chars` es global para toda la respuesta, no por archivo.
 
 ## Política de escritura
 
@@ -87,16 +127,24 @@ confirm=true
 ARTEL_ALLOW_WRITES=true
 ```
 
-`DELETE` permanece bloqueado en esta etapa.
+`DELETE` permanece bloqueado en esta etapa. Fabric Definition Engine V1.3 no contiene operaciones de escritura.
 
 ## Pruebas
 
 ```powershell
 python -m compileall -q src
-pytest
+python -m pytest
 ```
 
-GitHub Actions ejecuta las pruebas en Python 3.11 y 3.12.
+GitHub Actions ejecuta las pruebas en Python 3.11, 3.12 y 3.13.
+
+## Roadmap inmediato
+
+1. **V1.3** — Fabric Definition Engine read-only: PBIR/TMDL + LRO.
+2. **V1.4** — PBIR Canvas Inspector: páginas, visuales, posiciones, overlaps, alineación y grid.
+3. **V1.5** — TMDL Model Inspector: tablas, medidas, relaciones, roles y dependencias.
+4. **V1.6** — planners `dry_run`: propuestas de cambios sin escribir.
+5. **V1.7+** — escrituras quirúrgicas protegidas, solo después de gates y evidencia.
 
 ## Integración
 
