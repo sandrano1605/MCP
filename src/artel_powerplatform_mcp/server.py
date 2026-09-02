@@ -10,6 +10,7 @@ from .definitions import summarize_definition
 from .guards import evaluate_mutation
 from .local_audit import inspect_project, scan_for_embedded_secrets, validate_blueprint
 from .models import ToolResult, ok_result
+from .pbir import inspect_pbir_definition, inspect_pbir_parts, load_local_pbir_parts
 
 mcp = FastMCP("artel_powerplatform_mcp")
 AUTH_BROKER = AuthBroker()
@@ -21,6 +22,7 @@ CAPABILITIES = [
     {"tool": "artel_auth_begin_device_code", "mode": "auth", "purpose": "Iniciar autenticación Entra Device Code sin exponer credenciales."},
     {"tool": "artel_auth_complete_device_code", "mode": "auth", "purpose": "Completar Device Code y mantener el token únicamente en memoria."},
     {"tool": "artel_inspect_bi_project", "mode": "read", "purpose": "Inventariar PBIP, TMDL, PBIR, DAX y documentación local."},
+    {"tool": "artel_pbir_inspect_local_canvas", "mode": "read", "purpose": "Auditar geometría y calidad de lienzo PBIR desde un proyecto PBIP local."},
     {"tool": "artel_validate_s510_blueprint", "mode": "read", "purpose": "Validar guardas críticas del blueprint S510."},
     {"tool": "artel_scan_embedded_secrets", "mode": "read", "purpose": "Detectar indicadores de secretos sin devolver sus valores."},
     {"tool": "artel_powerbi_execute_dax", "mode": "cloud-read", "purpose": "Ejecutar una consulta DAX mediante Power BI ExecuteQueries."},
@@ -28,6 +30,7 @@ CAPABILITIES = [
     {"tool": "artel_fabric_list_items", "mode": "cloud-read", "purpose": "Listar items de un workspace Fabric."},
     {"tool": "artel_fabric_get_item", "mode": "cloud-read", "purpose": "Obtener metadatos de un item Fabric."},
     {"tool": "artel_fabric_get_report_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición PBIR de un Report Fabric."},
+    {"tool": "artel_fabric_inspect_report_canvas", "mode": "cloud-read", "purpose": "Auditar el lienzo PBIR de un Report Fabric sin devolver blobs Base64."},
     {"tool": "artel_fabric_get_semantic_model_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición TMDL de un Semantic Model Fabric."},
     {"tool": "artel_powerplatform_request", "mode": "guarded-cloud", "purpose": "Invocar una API Power Platform configurada; escrituras requieren triple guarda."},
 ]
@@ -45,6 +48,22 @@ def _fabric_client() -> FabricClient:
     return FabricClient(settings.fabric_api_base_url, AUTH_BROKER.get_token("fabric"))
 
 
+def _canvas_tool_result(operation: str, result: dict[str, Any], **metadata: Any) -> ToolResult:
+    status = "PASS" if result.get("status") == "PASS" else "WARNING"
+    return ToolResult(
+        ok=True,
+        status=status,
+        operation=operation,
+        data={**metadata, "canvas": result},
+        findings=[
+            {"page": page.get("display_name") or page.get("name") or page.get("page_key"), **finding}
+            for page in result.get("pages", [])
+            for finding in page.get("findings", [])
+        ],
+        warnings=["La auditoría detectó elementos de layout para revisar."] if status == "WARNING" else [],
+    )
+
+
 @mcp.tool(
     name="artel_list_capabilities",
     annotations={"title": "Descubrir capacidades ARTEL MCP", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
@@ -54,7 +73,7 @@ async def artel_list_capabilities() -> ToolResult:
     return ok_result(
         "artel_list_capabilities",
         status="PASS",
-        data={"server": "artel_powerplatform_mcp", "contract_version": "1.3", "capabilities": CAPABILITIES},
+        data={"server": "artel_powerplatform_mcp", "contract_version": "1.4", "capabilities": CAPABILITIES},
     )
 
 
@@ -122,6 +141,37 @@ async def artel_inspect_bi_project(project_path: str | None = None) -> ToolResul
     """Inspecciona un proyecto Power BI local. Si se omite project_path usa ARTEL_BI_PROJECT_PATH."""
     result = inspect_project(_project_path(project_path))
     return ok_result("artel_inspect_bi_project", status="PASS", data=result)
+
+
+@mcp.tool(
+    name="artel_pbir_inspect_local_canvas",
+    annotations={"title": "Auditar lienzo PBIR local", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def artel_pbir_inspect_local_canvas(
+    project_path: str | None = None,
+    report_name: str | None = None,
+    page: str | None = None,
+    alignment_tolerance: float = 3.0,
+    overlap_min_area: float = 1.0,
+    include_visuals: bool = False,
+    max_findings: int = 100,
+) -> ToolResult:
+    """Audita páginas y visuales PBIR del proyecto local: bounds, overlap, alineación, tab order y spacing."""
+    selected_report, parts = load_local_pbir_parts(_project_path(project_path), report_name=report_name)
+    result = inspect_pbir_parts(
+        parts,
+        page=page,
+        alignment_tolerance=alignment_tolerance,
+        overlap_min_area=overlap_min_area,
+        include_visuals=include_visuals,
+        max_findings=max_findings,
+    )
+    return _canvas_tool_result(
+        "artel_pbir_inspect_local_canvas",
+        result,
+        source="local",
+        report=selected_report,
+    )
 
 
 @mcp.tool(
@@ -233,6 +283,44 @@ async def artel_fabric_get_report_definition(
         "artel_fabric_get_report_definition",
         status="PASS",
         data={"workspace_id": workspace_id, "report_id": report_id, "definition": definition},
+    )
+
+
+@mcp.tool(
+    name="artel_fabric_inspect_report_canvas",
+    annotations={"title": "Auditar lienzo PBIR Fabric", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+async def artel_fabric_inspect_report_canvas(
+    workspace_id: str,
+    report_id: str,
+    page: str | None = None,
+    alignment_tolerance: float = 3.0,
+    overlap_min_area: float = 1.0,
+    include_visuals: bool = False,
+    max_findings: int = 100,
+    max_polls: int = 20,
+) -> ToolResult:
+    """Recupera PBIR desde Fabric y ejecuta auditoría geométrica dentro del MCP, sin devolver Base64."""
+    response = await _fabric_client().get_report_definition(
+        workspace_id,
+        report_id,
+        definition_format="PBIR",
+        max_polls=max_polls,
+    )
+    result = inspect_pbir_definition(
+        response,
+        page=page,
+        alignment_tolerance=alignment_tolerance,
+        overlap_min_area=overlap_min_area,
+        include_visuals=include_visuals,
+        max_findings=max_findings,
+    )
+    return _canvas_tool_result(
+        "artel_fabric_inspect_report_canvas",
+        result,
+        source="fabric",
+        workspace_id=workspace_id,
+        report_id=report_id,
     )
 
 
