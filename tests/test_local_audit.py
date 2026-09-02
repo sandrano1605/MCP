@@ -71,6 +71,16 @@ def test_secret_scan_does_not_return_secret_value(tmp_path: Path):
     assert "do-not-return" not in serialized
 
 
+def test_secret_scan_includes_dotenv_files(tmp_path: Path):
+    root = make_project(tmp_path)
+    (root / ".env.local").write_text("ACCESS_TOKEN=do-not-return", encoding="utf-8")
+    result = scan_for_embedded_secrets(root)
+    serialized = json.dumps(result)
+    assert result["count"] == 1
+    assert result["findings"][0]["file"] == ".env.local"
+    assert "do-not-return" not in serialized
+
+
 def test_secret_scan_skips_virtual_environment(tmp_path: Path):
     root = make_project(tmp_path)
     ignored = root / ".venv"
