@@ -10,13 +10,14 @@ def _b64(text: str) -> str:
 
 
 def test_definition_manifest_hides_payload_by_default():
+    encoded = _b64('{"displayName":"Resumen"}')
     source = {
         "definition": {
             "format": "PBIR",
             "parts": [
                 {
                     "path": "definition/pages/page1/page.json",
-                    "payload": _b64('{"displayName":"Resumen"}'),
+                    "payload": encoded,
                     "payloadType": "InlineBase64",
                 }
             ],
@@ -27,9 +28,9 @@ def test_definition_manifest_hides_payload_by_default():
 
     assert result["format"] == "PBIR"
     assert result["part_count"] == 1
-    assert result["parts"][0]["json_valid"] if "json_valid" in result["parts"][0] else True
     assert "content" not in result["parts"][0]
-    assert "payload" not in str(result)
+    assert encoded not in str(result)
+    assert result["parts"][0]["payload_type"] == "InlineBase64"
 
 
 def test_definition_content_uses_shared_budget():
@@ -49,6 +50,21 @@ def test_definition_content_uses_shared_budget():
     assert result["parts"][1]["content"] == "kl"
     assert result["parts"][1]["content_truncated"] is True
     assert result["content_budget_remaining"] == 0
+
+
+def test_definition_accepts_unpadded_base64():
+    encoded = _b64("hello Fabric").rstrip("=")
+    source = {
+        "definition": {
+            "format": "PBIR",
+            "parts": [
+                {"path": "definition.pbir", "payload": encoded, "payloadType": "InlineBase64"}
+            ],
+        }
+    }
+
+    result = summarize_definition(source, include_content=True)
+    assert result["parts"][0]["content"] == "hello Fabric"
 
 
 def test_definition_rejects_invalid_base64():
