@@ -19,7 +19,9 @@ Regla base:
 - mantener tools pequeñas y composables;
 - retornar resultados estructurados cuando sea posible;
 - no exigir al LLM IDs, rutas o detalles que puedan descubrirse automáticamente;
-- separar implementación determinística de interpretación generativa.
+- separar implementación determinística de interpretación generativa;
+- minimizar contexto: manifest primero, contenido completo solo bajo demanda;
+- nunca devolver Base64 de definiciones Fabric directamente al LLM si puede decodificarse y resumirse dentro del MCP.
 
 ## Servidores actuales
 
@@ -58,6 +60,9 @@ Responsabilidad:
 - inventario TMDL/PBIR/DAX;
 - validaciones determinísticas;
 - consultas Power BI read-only;
+- Auth Broker seguro para Fabric/Power BI/Power Platform;
+- discovery de Fabric;
+- recuperación read-only de definiciones PBIR/TMDL con soporte LRO;
 - acceso Power Platform protegido;
 - scanner de secretos redactado;
 - contratos estructurados para clientes MCP.
@@ -66,7 +71,18 @@ Al conectarse por primera vez, un cliente debe preferir:
 
 1. `artel_list_capabilities`
 2. `artel_health`
-3. la tool específica más pequeña para la tarea.
+3. `artel_auth_status` cuando la tarea sea cloud;
+4. la tool específica más pequeña para la tarea.
+
+Para Fabric:
+
+1. descubrir workspace/item antes de pedir IDs al usuario;
+2. solicitar definición sin contenido primero;
+3. inspeccionar `paths` y tamaños;
+4. solicitar contenido solamente cuando una parte sea relevante;
+5. no habilitar `updateDefinition` hasta que exista planner, dry-run, checkpoint, rollback y evidencia.
+
+Nota: las APIs oficiales `getDefinition` de Report y Semantic Model exigen scopes de lectura-escritura aunque la operación ejecutada por este MCP sea de lectura. Ese requisito de OAuth no autoriza automáticamente escrituras en nuestras tools.
 
 ## Escrituras
 
@@ -79,6 +95,8 @@ POST/PATCH/PUT solo pueden ejecutarse cuando coinciden:
 - `ARTEL_ALLOW_WRITES=true`.
 
 `DELETE` permanece bloqueado hasta que exista una tool específica con checkpoint, rollback y pruebas.
+
+Fabric V1.3 no expone `updateDefinition`.
 
 ## Git
 
@@ -98,7 +116,7 @@ Si se toca el servidor ARTEL:
 
 ```powershell
 python -m compileall -q src
-pytest
+python -m pytest
 ```
 
 Si se toca `windows-capture`:
