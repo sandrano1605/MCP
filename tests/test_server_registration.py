@@ -12,6 +12,7 @@ def test_server_import_registers_tools_without_type_errors():
         "artel_auth_begin_device_code",
         "artel_auth_complete_device_code",
         "artel_inspect_bi_project",
+        "artel_pbir_inspect_local_canvas",
         "artel_validate_s510_blueprint",
         "artel_scan_embedded_secrets",
         "artel_powerbi_execute_dax",
@@ -19,6 +20,7 @@ def test_server_import_registers_tools_without_type_errors():
         "artel_fabric_list_items",
         "artel_fabric_get_item",
         "artel_fabric_get_report_definition",
+        "artel_fabric_inspect_report_canvas",
         "artel_fabric_get_semantic_model_definition",
         "artel_powerplatform_request",
     }
