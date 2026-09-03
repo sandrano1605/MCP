@@ -8,6 +8,12 @@ from typing import Any
 
 from .clients import FabricClient, PowerBIClient
 from .config import load_settings
+from .power_automate_api import (
+    PowerAutomateApiClient,
+    parse_make_power_automate_url,
+    summarize_flow_actions,
+    summarize_flow_runs,
+)
 from .tmdl import inspect_tmdl_parts, load_local_tmdl_parts
 
 _RUNTIME_REQUIRED_SIGNALS = (
@@ -292,6 +298,93 @@ async def _fabric_probe(
     return result, calls
 
 
+def _list_count(payload: Any) -> int:
+    if isinstance(payload, list):
+        return len(payload)
+    if isinstance(payload, dict) and isinstance(payload.get("value"), list):
+        return len(payload["value"])
+    return 0
+
+
+async def _power_automate_api_probe(
+    token: str | None,
+    base_url: str,
+    *,
+    power_automate_url: str | None,
+    environment_id: str | None,
+    workflow_id: str | None,
+) -> tuple[dict[str, Any], int]:
+    parsed_environment: str | None = None
+    parsed_workflow: str | None = None
+    if power_automate_url:
+        parsed_environment, parsed_workflow = parse_make_power_automate_url(power_automate_url)
+    target_environment = environment_id or parsed_environment or os.getenv("POWER_AUTOMATE_ENVIRONMENT_ID") or None
+    target_workflow = workflow_id or parsed_workflow or os.getenv("POWER_AUTOMATE_FLOW_ID") or None
+
+    if not target_environment or not target_workflow:
+        return _status(
+            "NOT_CONFIGURED",
+            authenticated=bool(token),
+            target_configured=False,
+            flow_discovery="NOT_RUN",
+            action_inventory="NOT_RUN",
+            run_history="NOT_RUN",
+        ), 0
+    if not token:
+        return _status(
+            "NOT_CONFIGURED",
+            authenticated=False,
+            target_configured=True,
+            flow_discovery="NOT_RUN",
+            action_inventory="NOT_RUN",
+            run_history="NOT_RUN",
+        ), 0
+
+    client = PowerAutomateApiClient(token, base_url=base_url)
+    flows = await client.list_cloud_flows(target_environment, target_workflow)
+    actions = await client.list_flow_actions(target_environment, target_workflow)
+    runs = await client.list_flow_runs(target_environment, target_workflow)
+    calls = 3
+
+    flow_count = _list_count(flows)
+    action_summary = summarize_flow_actions(actions)
+    run_summary = summarize_flow_runs(runs)
+    all_signals = action_summary["signal_count"] == action_summary["required_signal_count"]
+
+    if flow_count == 0:
+        status = "FAIL"
+    elif action_summary["action_count"] == 0:
+        status = "REVIEW"
+    elif run_summary["run_count"] == 0:
+        status = "REVIEW"
+    elif not all_signals:
+        status = "REVIEW"
+    else:
+        status = "PASS"
+
+    return _status(
+        status,
+        authenticated=True,
+        target_configured=True,
+        flow_discovery="PASS" if flow_count > 0 else "FAIL",
+        flow_count=flow_count,
+        action_inventory="PASS" if action_summary["action_count"] > 0 else "REVIEW",
+        action_count=action_summary["action_count"],
+        structural_signal_count=action_summary["signal_count"],
+        structural_required_signal_count=action_summary["required_signal_count"],
+        structural_signals=action_summary["signals"],
+        action_names=action_summary["action_names"],
+        run_history="PASS" if run_summary["run_count"] > 0 else "REVIEW",
+        run_count=run_summary["run_count"],
+        successful_run_count=run_summary["success_count"],
+        failed_run_count=run_summary["failed_count"],
+        latest_run=run_summary["latest_run"],
+        runtime_action_outputs_validated=False,
+        raw_parameters_returned=False,
+        token_values_exposed=False,
+    ), calls
+
+
 async def run_runtime_certification(
     project_path: Path,
     *,
@@ -300,6 +393,9 @@ async def run_runtime_certification(
     seller_a: str | None = None,
     seller_b: str | None = None,
     flow_run_evidence: Path | None = None,
+    power_automate_url: str | None = None,
+    power_automate_environment_id: str | None = None,
+    power_automate_flow_id: str | None = None,
     fabric_workspace_id: str | None = None,
     fabric_report_id: str | None = None,
     fabric_semantic_model_id: str | None = None,
@@ -336,6 +432,15 @@ async def run_runtime_certification(
         report_id=fabric_report_id or os.getenv("FABRIC_REPORT_ID") or None,
         semantic_model_id=fabric_semantic_model_id or os.getenv("FABRIC_SEMANTIC_MODEL_ID") or None,
     )
+
+    power_automate_api, power_automate_calls = await _power_automate_api_probe(
+        settings.powerplatform_access_token,
+        settings.powerplatform_api_base_url or "https://api.powerplatform.com",
+        power_automate_url=power_automate_url,
+        environment_id=power_automate_environment_id,
+        workflow_id=power_automate_flow_id,
+    )
+
     if flow_run_evidence:
         power_automate = audit_power_automate_runtime_evidence(flow_run_evidence)
     else:
@@ -345,6 +450,7 @@ async def run_runtime_certification(
         "power_bi_dax": power_bi,
         "seller_identity_isolation": seller,
         "fabric": fabric,
+        "power_automate_api": power_automate_api,
         "power_automate": power_automate,
     }
     statuses = [probe["status"] for probe in probes.values()]
@@ -363,8 +469,9 @@ async def run_runtime_certification(
         "status": overall,
         "project_name": project_path.name,
         "probes": probes,
-        "cloud_calls": pbi_calls + seller_calls + fabric_calls,
+        "cloud_calls": pbi_calls + seller_calls + fabric_calls + power_automate_calls,
         "writes": 0,
         "secrets_returned": False,
         "seller_isolation_pass_requires_two_distinct_identities": True,
+        "power_automate_full_runtime_pass_requires_action_level_evidence": True,
     }
