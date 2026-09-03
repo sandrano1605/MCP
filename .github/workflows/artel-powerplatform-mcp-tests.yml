@@ -31,8 +31,15 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
+      - name: Match certified local FastMCP runtime
+        if: matrix.python-version == '3.13'
+        run: python -m pip install "mcp==1.13.0"
+
       - name: Compile package
         run: python -m compileall -q src
+
+      - name: Import composed MCP
+        run: python -c "from artel_powerplatform_mcp.app import mcp; print('APP_IMPORT=PASS')"
 
       - name: Run tests
         run: python -m pytest
