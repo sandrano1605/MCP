@@ -1,7 +1,12 @@
 from pathlib import Path
 
 from artel_powerplatform_mcp.auth import AuthBroker
-from artel_powerplatform_mcp.config import FABRIC_DEFAULT_SCOPES, POWERBI_DEFAULT_SCOPES, Settings
+from artel_powerplatform_mcp.config import (
+    FABRIC_DEFAULT_SCOPES,
+    POWERBI_DEFAULT_SCOPES,
+    POWERPLATFORM_DEFAULT_SCOPES,
+    Settings,
+)
 
 
 def make_settings(**overrides):
@@ -18,8 +23,8 @@ def make_settings(**overrides):
         "powerbi_dataset_id": None,
         "powerbi_scopes": POWERBI_DEFAULT_SCOPES,
         "powerplatform_access_token": None,
-        "powerplatform_api_base_url": None,
-        "powerplatform_scopes": (),
+        "powerplatform_api_base_url": "https://api.powerplatform.com",
+        "powerplatform_scopes": POWERPLATFORM_DEFAULT_SCOPES,
     }
     values.update(overrides)
     return Settings(**values)
@@ -73,6 +78,26 @@ def test_device_code_flow_stores_token_only_in_memory():
     status = broker.status("fabric")
     assert status["token_source"] == "memory"
     assert "memory-only-access-token" not in str(status)
+
+
+def test_powerplatform_device_code_uses_official_default_scope():
+    captured = {}
+
+    class FakeApplication:
+        def initiate_device_flow(self, scopes):
+            captured["scopes"] = scopes
+            return {
+                "user_code": "ABCD-EFGH",
+                "verification_uri": "https://microsoft.com/devicelogin",
+                "message": "Sign in",
+                "expires_in": 900,
+                "device_code": "internal-device-code",
+            }
+
+    broker = AuthBroker(settings_loader=make_settings, application_factory=lambda **kwargs: FakeApplication())
+    begin = broker.begin_device_flow("powerplatform")
+    assert begin["token_returned"] is False
+    assert captured["scopes"] == list(POWERPLATFORM_DEFAULT_SCOPES)
 
 
 def test_environment_token_has_priority_over_memory_token():
