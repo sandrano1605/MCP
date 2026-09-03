@@ -50,7 +50,7 @@ def run_self_test() -> dict[str, Any]:
             _check("TMDL_TABLES", int(model.get("table_count", 0)) == 2),
             _check("TMDL_TEST_MEASURES", int(model.get("measure_count", 0)) >= 4 and len(measures) >= 4),
             _check("DAX_MEASURE_HASHES", all(bool(item.get("expression_sha256")) for item in measures)),
-            _check("RLS_POSITIVE_CASE", bool(model.get("rls_present")) and security.get("security_policy", {}).get("posture") == "DECLARED_NOT_RUNTIME_CERTIFIED"),
+            _check("RLS_POSITIVE_CASE", bool(model.get("rls_present")) and security.get("security_policy", {}).get("rls_posture") == "RLS_DECLARED"),
             _check("RLS_NEGATIVE_CASE_DETECTED", any(item.get("kind") == "RLS_REQUIRED_BUT_NOT_DECLARED" for item in no_rls_security.get("findings", []))),
             _check("BIDIRECTIONAL_RELATIONSHIP_DETECTED", any(item.get("kind") == "BIDIRECTIONAL_RELATIONSHIP" for item in model.get("findings", []))),
             _check("PLANNER_IS_DRY_RUN", plan.get("mode") == "DRY_RUN" and plan.get("apply") is False),
