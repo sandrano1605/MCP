@@ -15,6 +15,9 @@ def main() -> None:
     parser.add_argument("--seller-a", help="Valor esperado para identidad vendedor A")
     parser.add_argument("--seller-b", help="Valor esperado para identidad vendedor B")
     parser.add_argument("--flow-run-evidence", help="JSON de evidencia de una ejecución real Power Automate")
+    parser.add_argument("--power-automate-url", help="URL https://make.powerautomate.com/.../environments/.../flows/...")
+    parser.add_argument("--power-automate-environment-id", help="Environment ID; alternativa al URL")
+    parser.add_argument("--power-automate-flow-id", help="Workflow/flow GUID; alternativa al URL")
     parser.add_argument("--fabric-workspace-id")
     parser.add_argument("--fabric-report-id")
     parser.add_argument("--fabric-semantic-model-id")
@@ -29,6 +32,9 @@ def main() -> None:
             seller_a=args.seller_a,
             seller_b=args.seller_b,
             flow_run_evidence=Path(args.flow_run_evidence).expanduser() if args.flow_run_evidence else None,
+            power_automate_url=args.power_automate_url,
+            power_automate_environment_id=args.power_automate_environment_id,
+            power_automate_flow_id=args.power_automate_flow_id,
             fabric_workspace_id=args.fabric_workspace_id,
             fabric_report_id=args.fabric_report_id,
             fabric_semantic_model_id=args.fabric_semantic_model_id,
@@ -45,6 +51,7 @@ def _compact(result: dict[str, Any]) -> str:
     pbi = probes.get("power_bi_dax") or {}
     seller = probes.get("seller_identity_isolation") or {}
     fabric = probes.get("fabric") or {}
+    flow_api = probes.get("power_automate_api") or {}
     flow = probes.get("power_automate") or {}
     identities = seller.get("identities") or []
     identity_summary = ";".join(
@@ -58,6 +65,9 @@ def _compact(result: dict[str, Any]) -> str:
     ) or "-"
     signals = flow.get("signals") or {}
     missing_signals = ",".join(name for name, present in signals.items() if not present) or "NONE"
+    structural_signals = flow_api.get("structural_signals") or {}
+    structural_missing = ",".join(name for name, present in structural_signals.items() if not present) or "NONE"
+    latest_run = flow_api.get("latest_run") or {}
     lines = [
         "ARTEL_RUNTIME_CERTIFICATION",
         f"OVERALL={result.get('status')}",
@@ -72,6 +82,15 @@ def _compact(result: dict[str, Any]) -> str:
         f"FABRIC={fabric.get('status')}",
         f"FABRIC_WORKSPACES={fabric.get('workspace_count')}",
         f"FABRIC_DEFINITION_PROBE={fabric.get('definition_probe')}",
+        f"POWER_AUTOMATE_API={flow_api.get('status')}",
+        f"POWER_AUTOMATE_FLOW_DISCOVERY={flow_api.get('flow_discovery')}",
+        f"POWER_AUTOMATE_ACTIONS={flow_api.get('action_count')}",
+        f"POWER_AUTOMATE_STRUCTURE_SIGNALS={flow_api.get('structural_signal_count')}/{flow_api.get('structural_required_signal_count')}",
+        f"POWER_AUTOMATE_STRUCTURE_MISSING={structural_missing}",
+        f"POWER_AUTOMATE_RUN_HISTORY={flow_api.get('run_history')}",
+        f"POWER_AUTOMATE_RUNS={flow_api.get('run_count')}",
+        f"POWER_AUTOMATE_LATEST_RUN_STATUS={latest_run.get('status')}",
+        f"POWER_AUTOMATE_ACTION_OUTPUTS_VALIDATED={flow_api.get('runtime_action_outputs_validated')}",
         f"POWER_AUTOMATE_RUNTIME={flow.get('status')}",
         f"POWER_AUTOMATE_RUN_ID={flow.get('run_id_present')}",
         f"POWER_AUTOMATE_SUCCESS={flow.get('successful_status')}",
