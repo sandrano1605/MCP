@@ -51,6 +51,11 @@ def _compact(result: dict[str, Any]) -> str:
         f"{item.get('identity')}:{item.get('status')}:visible={item.get('visible_sellers')}:other={item.get('other_sellers')}"
         for item in identities
     ) or "-"
+    discovery = seller.get("column_discovery") or {}
+    candidate_summary = ";".join(
+        f"{item.get('column')}:{item.get('score')}"
+        for item in (discovery.get("candidates") or [])[:10]
+    ) or "-"
     signals = flow.get("signals") or {}
     missing_signals = ",".join(name for name, present in signals.items() if not present) or "NONE"
     lines = [
@@ -60,6 +65,9 @@ def _compact(result: dict[str, Any]) -> str:
         f"POWER_BI_ROWS={pbi.get('rows')}",
         f"POWER_BI_PROBE_VALUE={pbi.get('probe_value')}",
         f"SELLER_IDENTITY_ISOLATION={seller.get('status')}",
+        f"SELLER_COLUMN={seller.get('effective_column')}",
+        f"SELLER_COLUMN_DISCOVERY={discovery.get('selection_mode')}",
+        f"SELLER_COLUMN_CANDIDATES={candidate_summary}",
         f"SELLER_IDENTITIES={identity_summary}",
         f"FABRIC={fabric.get('status')}",
         f"FABRIC_WORKSPACES={fabric.get('workspace_count')}",
