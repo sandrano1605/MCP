@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .certification import certify_local_bi, run_self_test
 from .config import load_settings
+from .flow_audit import DEFAULT_REQUIRED_STEPS, audit_flow_definition, load_flow_export
 from .model_policy import assess_model_policy
 from .models import ToolResult
 from .pbir import inspect_pbir_parts, load_local_pbir_parts
@@ -15,7 +17,7 @@ _EXTENSION_CAPABILITIES = [
     {
         "tool": "artel_extension_info",
         "mode": "read",
-        "purpose": "Informar versión y capacidades de la capa de policy/planning.",
+        "purpose": "Informar versión y capacidades de policy/planning/certificación.",
     },
     {
         "tool": "artel_tmdl_assess_local_security",
@@ -26,6 +28,21 @@ _EXTENSION_CAPABILITIES = [
         "tool": "artel_plan_local_bi",
         "mode": "read",
         "purpose": "Generar un plan combinado PBIR/TMDL en DRY_RUN, sin modificar archivos.",
+    },
+    {
+        "tool": "artel_self_test",
+        "mode": "read",
+        "purpose": "Ejecutar laboratorio end-to-end offline con PBIR, TMDL, DAX, RLS, Power Automate y guardas.",
+    },
+    {
+        "tool": "artel_audit_power_automate_export",
+        "mode": "read",
+        "purpose": "Auditar un export JSON de Power Automate sin exponer secretos.",
+    },
+    {
+        "tool": "artel_certify_local_bi",
+        "mode": "read",
+        "purpose": "Ejecutar auditoría completa read-only de un PBIP real y opcionalmente su export Power Automate.",
     },
 ]
 
@@ -57,9 +74,12 @@ async def artel_extension_info() -> ToolResult:
         status="PASS",
         operation="artel_extension_info",
         data={
-            "extension_contract_version": "1.6-dry-run",
+            "extension_contract_version": "1.7-e2e",
             "security_policy": True,
             "combined_planner": True,
+            "offline_self_test": True,
+            "power_automate_export_audit": True,
+            "local_full_certification": True,
             "writes_exposed": False,
             "apply_supported": False,
         },
@@ -159,6 +179,91 @@ async def artel_plan_local_bi(
         findings=findings,
         warnings=[
             "Plan DRY_RUN únicamente: no se generan ni aplican patches PBIR/TMDL en esta versión."
+        ],
+    )
+
+
+@mcp.tool(
+    name="artel_self_test",
+    annotations={
+        "title": "ARTEL MCP self-test end-to-end",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
+async def artel_self_test() -> ToolResult:
+    """Crea un laboratorio temporal y certifica PBIR, TMDL, DAX, RLS, flow y guardas sin cloud ni escrituras."""
+    result = run_self_test()
+    return ToolResult(
+        ok=result.get("status") == "PASS",
+        status="PASS" if result.get("status") == "PASS" else "FAIL",
+        operation="artel_self_test",
+        data=result,
+        findings=[item for item in result.get("checks", []) if item.get("status") != "PASS"],
+    )
+
+
+@mcp.tool(
+    name="artel_audit_power_automate_export",
+    annotations={
+        "title": "Auditar export Power Automate",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
+async def artel_audit_power_automate_export(
+    flow_path: str,
+    required_steps_csv: str | None = None,
+) -> ToolResult:
+    """Audita estructura, runAfter, pasos críticos e indicadores de secretos en un export JSON local."""
+    required = [item.strip() for item in required_steps_csv.split(",") if item.strip()] if required_steps_csv else list(DEFAULT_REQUIRED_STEPS)
+    result = audit_flow_definition(load_flow_export(Path(flow_path).expanduser()), required_steps=required)
+    return ToolResult(
+        ok=True,
+        status="WARNING" if result.get("status") == "REVIEW" else "PASS",
+        operation="artel_audit_power_automate_export",
+        data=result,
+        findings=result.get("findings", []),
+        warnings=["Auditoría estática del export; no certifica una ejecución runtime del flujo."],
+    )
+
+
+@mcp.tool(
+    name="artel_certify_local_bi",
+    annotations={
+        "title": "Certificar PBIP local end-to-end",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    },
+)
+async def artel_certify_local_bi(
+    project_path: str | None = None,
+    flow_path: str | None = None,
+    expect_rls: bool = False,
+    max_findings: int = 100,
+) -> ToolResult:
+    """Consolida inventario, canvas, modelo, medidas, policy, planner, secretos y flow sin modificar el proyecto."""
+    result = certify_local_bi(
+        _project_path(project_path),
+        flow_path=Path(flow_path).expanduser() if flow_path else None,
+        expect_rls=expect_rls,
+        max_findings=max_findings,
+    )
+    status = result.get("status")
+    return ToolResult(
+        ok=status != "FAIL",
+        status="FAIL" if status == "FAIL" else ("WARNING" if status == "REVIEW" else "PASS"),
+        operation="artel_certify_local_bi",
+        data=result,
+        findings=result.get("project_findings", []),
+        warnings=[
+            "Certificación local read-only: runtime Power BI/Fabric/Power Automate y aislamiento por vendedor se reportan aparte."
         ],
     )
 
