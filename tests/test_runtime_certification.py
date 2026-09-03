@@ -68,7 +68,7 @@ def test_runtime_flow_evidence_passes_only_with_full_signals(tmp_path: Path):
     assert result["signal_count"] == result["required_signal_count"]
 
 
-def test_runtime_certification_separates_dax_fabric_and_identity(monkeypatch, tmp_path: Path):
+def test_runtime_certification_separates_dax_fabric_identity_and_flow_api(monkeypatch, tmp_path: Path):
     class FakePBI:
         def __init__(self, base_url, token, dataset_id):
             self.token = token
@@ -109,8 +109,33 @@ def test_runtime_certification_separates_dax_fabric_and_identity(monkeypatch, tm
         async def get_semantic_model_definition(self, *args, **kwargs):
             return {"definition": {"parts": []}}
 
+    class FakeFlowApi:
+        def __init__(self, token, base_url):
+            assert token == "powerplatform-token"
+
+        async def list_cloud_flows(self, environment_id, workflow_id):
+            return {"value": [{"workflowId": workflow_id}]}
+
+        async def list_flow_actions(self, environment_id, workflow_id):
+            names = [
+                "Payload_LLM",
+                "LLM_Adapter",
+                "Parse_JSON_LLM",
+                "G8_Percentage_Gate",
+                "Semantic_Grounding_Gate",
+                "Insight_Final",
+                "Audit_Contract",
+                "HTML_Email_Final",
+                "Send_Email_V2",
+            ]
+            return {"value": [{"actionName": name} for name in names]}
+
+        async def list_flow_runs(self, environment_id, workflow_id):
+            return {"value": [{"runId": "run-1", "status": "Succeeded", "startTime": "2026-09-03T10:00:00Z"}]}
+
     monkeypatch.setattr(runtime, "PowerBIClient", FakePBI)
     monkeypatch.setattr(runtime, "FabricClient", FakeFabric)
+    monkeypatch.setattr(runtime, "PowerAutomateApiClient", FakeFlowApi)
     monkeypatch.setattr(
         runtime,
         "load_settings",
@@ -120,6 +145,8 @@ def test_runtime_certification_separates_dax_fabric_and_identity(monkeypatch, tm
             powerbi_dataset_id="11111111-1111-1111-1111-111111111111",
             fabric_access_token="fabric-token",
             fabric_api_base_url="https://api.fabric.microsoft.com/v1",
+            powerplatform_access_token="powerplatform-token",
+            powerplatform_api_base_url="https://api.powerplatform.com",
         ),
     )
     monkeypatch.setenv("ARTEL_POWERBI_SELLER_A_TOKEN", "token-a")
@@ -131,11 +158,16 @@ def test_runtime_certification_separates_dax_fabric_and_identity(monkeypatch, tm
             seller_column="S150_MASTER_CUADRADA[Solicitante]",
             seller_a="A",
             seller_b="B",
+            power_automate_environment_id="Default-87b645f5-cc1a-40c9-ad5b-f5c733a210de",
+            power_automate_flow_id="de5884a2-3c30-49c8-858f-a6cb624420c0",
         )
     )
     assert result["probes"]["power_bi_dax"]["status"] == "PASS"
     assert result["probes"]["seller_identity_isolation"]["status"] == "PASS"
     assert result["probes"]["fabric"]["status"] == "PASS"
+    assert result["probes"]["power_automate_api"]["status"] == "PASS"
+    assert result["probes"]["power_automate_api"]["structural_signal_count"] == 9
+    assert result["probes"]["power_automate_api"]["runtime_action_outputs_validated"] is False
     assert result["probes"]["power_automate"]["status"] == "NOT_CONFIGURED"
     assert result["status"] == "BLOCKED"
     assert result["writes"] == 0
