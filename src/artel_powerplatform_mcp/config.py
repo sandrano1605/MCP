@@ -13,6 +13,9 @@ FABRIC_DEFAULT_SCOPES = (
 POWERBI_DEFAULT_SCOPES = (
     "https://analysis.windows.net/powerbi/api/Dataset.Read.All",
 )
+POWERPLATFORM_DEFAULT_SCOPES = (
+    "https://api.powerplatform.com/.default",
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,6 @@ def load_settings() -> Settings:
         powerbi_dataset_id=os.getenv("POWERBI_DATASET_ID") or None,
         powerbi_scopes=_split_scopes(os.getenv("POWERBI_SCOPES"), POWERBI_DEFAULT_SCOPES),
         powerplatform_access_token=os.getenv("POWERPLATFORM_ACCESS_TOKEN") or None,
-        powerplatform_api_base_url=(os.getenv("POWERPLATFORM_API_BASE_URL") or "").rstrip("/") or None,
-        powerplatform_scopes=_split_scopes(os.getenv("POWERPLATFORM_SCOPES")),
+        powerplatform_api_base_url=os.getenv("POWERPLATFORM_API_BASE_URL", "https://api.powerplatform.com").rstrip("/"),
+        powerplatform_scopes=_split_scopes(os.getenv("POWERPLATFORM_SCOPES"), POWERPLATFORM_DEFAULT_SCOPES),
     )
