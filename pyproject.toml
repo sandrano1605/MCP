@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 artel-powerplatform-mcp = "artel_powerplatform_mcp.app:main"
+artel-certify = "artel_powerplatform_mcp.cert_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/artel_powerplatform_mcp"]
