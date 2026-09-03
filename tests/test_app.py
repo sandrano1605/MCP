@@ -8,6 +8,7 @@ def test_app_import_registers_extension_capabilities():
     assert "artel_plan_local_bi" in tools
     assert "artel_self_test" in tools
     assert "artel_audit_power_automate_export" in tools
+    assert "artel_power_automate_inspect_flow" in tools
     assert "artel_certify_local_bi" in tools
 
 
@@ -22,6 +23,7 @@ def test_extension_info_is_read_only_contract():
     assert result.data["extension_contract_version"] == "1.7-e2e"
     assert result.data["offline_self_test"] is True
     assert result.data["power_automate_export_audit"] is True
+    assert result.data["power_automate_api_runtime_read"] is True
     assert result.data["local_full_certification"] is True
     assert result.data["writes_exposed"] is False
     assert result.data["apply_supported"] is False
