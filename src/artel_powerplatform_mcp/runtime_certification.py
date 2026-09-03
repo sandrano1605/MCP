@@ -8,6 +8,7 @@ from typing import Any
 
 from .clients import FabricClient, PowerBIClient
 from .config import load_settings
+from .tmdl import inspect_tmdl_parts, load_local_tmdl_parts
 
 _RUNTIME_REQUIRED_SIGNALS = (
     "payload_llm",
@@ -20,6 +21,19 @@ _RUNTIME_REQUIRED_SIGNALS = (
     "html_email_final",
     "send_email_v2",
 )
+
+_SELLER_STRONG_TERMS = (
+    "vendedor",
+    "seller",
+    "salesperson",
+    "sales_rep",
+    "salesrep",
+    "sales representative",
+    "representante_ventas",
+    "ejecutivo_ventas",
+)
+_SELLER_WEAK_TERMS = ("pernr", "vkgrp", "sales_group", "grupo_vendedores")
+_SELLER_EXCLUDE_TERMS = ("solicitante", "cliente", "customer", "kunnr", "shipto", "soldto")
 
 
 def _status(value: str, **extra: Any) -> dict[str, Any]:
@@ -76,6 +90,52 @@ def build_seller_isolation_query(seller_column: str, expected_value: str) -> str
         f"  \"OTHER_SELLERS\", COUNTROWS(FILTER(VALUES({ref}), NOT ISBLANK({ref}) && {ref} <> {expected}))\n"
         ")"
     )
+
+
+def discover_seller_columns(project_path: Path) -> dict[str, Any]:
+    """Busca candidatos de vendedor en el TMDL sin asumir que cliente/solicitante es vendedor."""
+    _model_name, parts = load_local_tmdl_parts(project_path)
+    model = inspect_tmdl_parts(parts, include_columns=True, max_items=5000)
+    candidates: list[dict[str, Any]] = []
+    for table in model.get("tables") or []:
+        table_name = str(table.get("name") or "")
+        for column in table.get("columns") or []:
+            column_name = str(column.get("name") or "")
+            source_column = str(column.get("source_column") or "")
+            text = f"{table_name} {column_name} {source_column}".casefold()
+            normalized = re.sub(r"[^a-z0-9áéíóúñ]+", "_", text)
+            if any(term in normalized for term in _SELLER_EXCLUDE_TERMS):
+                continue
+            score = 0
+            matched: list[str] = []
+            for term in _SELLER_STRONG_TERMS:
+                normalized_term = re.sub(r"[^a-z0-9áéíóúñ]+", "_", term.casefold())
+                if normalized_term in normalized:
+                    score += 100
+                    matched.append(term)
+            for term in _SELLER_WEAK_TERMS:
+                if term in normalized:
+                    score += 30
+                    matched.append(term)
+            if score:
+                candidates.append(
+                    {
+                        "column": f"{table_name}[{column_name}]",
+                        "score": score,
+                        "matched_terms": sorted(set(matched)),
+                        "hidden": bool(column.get("is_hidden")),
+                    }
+                )
+    candidates.sort(key=lambda item: (-int(item["score"]), str(item["column"]).casefold()))
+    strong = [item for item in candidates if int(item["score"]) >= 100]
+    selected = strong[0]["column"] if len(strong) == 1 else None
+    return {
+        "selected": selected,
+        "candidate_count": len(candidates),
+        "strong_candidate_count": len(strong),
+        "candidates": candidates[:20],
+        "selection_mode": "AUTO_UNAMBIGUOUS" if selected else "REVIEW_REQUIRED" if candidates else "NOT_FOUND",
+    }
 
 
 def _flatten_evidence(value: Any, *, prefix: str = "") -> list[tuple[str, str]]:
@@ -193,7 +253,7 @@ async def _seller_probe(
         )
 
     status = "PASS" if all(item["status"] == "PASS" for item in results) else "FAIL"
-    return _status("PASS" if status == "PASS" else "FAIL", mode="IDENTITY_ISOLATION", identities=results), calls
+    return _status(status, mode="IDENTITY_ISOLATION", identities=results), calls
 
 
 async def _fabric_probe(
@@ -248,15 +308,27 @@ async def run_runtime_certification(
         raise FileNotFoundError(f"No existe el proyecto: {project_path}")
     settings = load_settings()
     target_dataset = dataset_id or settings.powerbi_dataset_id
+    explicit_seller_column = seller_column or os.getenv("ARTEL_SELLER_COLUMN") or None
+    seller_discovery = discover_seller_columns(project_path) if not explicit_seller_column else {
+        "selected": explicit_seller_column,
+        "candidate_count": 1,
+        "strong_candidate_count": 1,
+        "candidates": [{"column": explicit_seller_column, "score": "EXPLICIT", "matched_terms": []}],
+        "selection_mode": "EXPLICIT",
+    }
+    effective_seller_column = explicit_seller_column or seller_discovery.get("selected")
 
     power_bi, pbi_calls = await _power_bi_probe(settings.powerbi_access_token, settings.powerbi_api_base_url, target_dataset)
     seller, seller_calls = await _seller_probe(
         base_url=settings.powerbi_api_base_url,
         dataset_id=target_dataset,
-        seller_column=seller_column or os.getenv("ARTEL_SELLER_COLUMN") or None,
+        seller_column=effective_seller_column,
         seller_a=seller_a or os.getenv("ARTEL_SELLER_A_VALUE") or None,
         seller_b=seller_b or os.getenv("ARTEL_SELLER_B_VALUE") or None,
     )
+    seller["column_discovery"] = seller_discovery
+    seller["effective_column"] = effective_seller_column
+
     fabric, fabric_calls = await _fabric_probe(
         settings.fabric_access_token,
         settings.fabric_api_base_url,
