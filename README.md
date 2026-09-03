@@ -6,11 +6,12 @@ Repositorio de servidores MCP reutilizables para automatización, auditoría y e
 
 - `read-first`: inspeccionar antes de modificar.
 - seguridad por defecto: escrituras bloqueadas salvo habilitación y confirmación explícitas.
-- herramientas pequeñas y descubribles para que distintos clientes MCP/LLM puedan utilizarlas.
+- tools pequeñas, autocontenidas y descubribles para que distintos clientes MCP/LLM puedan utilizarlas.
 - resultados estructurados y testeables.
-- API/formatos oficiales antes que automatización visual cuando sea posible.
+- API y formatos oficiales antes que automatización visual cuando sea posible.
 - evidencia runtime antes de declarar una operación validada.
-- minimizar contexto: manifiestos y diagnóstico primero, detalle completo solo bajo demanda.
+- minimizar contexto: resumen y diagnóstico primero; detalle completo solo bajo demanda.
+- separar explícitamente análisis estático de validación runtime.
 
 ## Servidores
 
@@ -31,16 +32,15 @@ Capacidades principales:
 
 ### `artel-powerplatform-mcp`
 
-Servidor Python orientado a Power BI, PBIP, PBIR, Microsoft Fabric y Power Platform.
+Servidor Python orientado a Power BI, PBIP, PBIR, TMDL, Microsoft Fabric y Power Platform.
 
 Código:
 
 - `src/artel_powerplatform_mcp/`
 
-Estado V1.4:
+Estado V1.5:
 
-- autodiscovery de capacidades;
-- health check sin revelar secretos;
+- autodiscovery de capacidades y health check seguro;
 - Auth Broker para Fabric, Power BI y Power Platform;
 - Microsoft Entra Device Code Flow con tokens solo en memoria;
 - inventario local PBIP/TMDL/PBIR/DAX;
@@ -49,16 +49,20 @@ Estado V1.4:
 - Fabric Definition Engine read-only para Reports y Semantic Models;
 - soporte Fabric LRO `202 Accepted` + polling;
 - decodificación segura `InlineBase64` con o sin padding;
-- PBIR Canvas Inspector compartido para fuente local y Fabric;
-- análisis de límites del lienzo, solapes, deriva de alineación, `tabOrder` duplicado y patrones de spacing;
-- reconocimiento de grupos PBIR para evitar marcar la relación padre/hijo como solape incorrecto;
-- lista completa de visuales solo mediante `include_visuals=true`;
+- PBIR Canvas Inspector compartido entre fuente local y Fabric;
+- clasificación semántica de overlaps: layering esperado, posible oclusión, overlay de contenido y overlap genérico;
+- visuales ocultos fuera del análisis geométrico por defecto;
+- TMDL Model Inspector compartido entre fuente local y Fabric;
+- inventario de tablas, columnas, medidas, particiones, relaciones y roles/RLS;
+- cross-filter y cardinalidad solo cuando están declarados en TMDL, sin inferir valores ausentes;
+- dependencias DAX/RLS lexicales marcadas como `STATIC_LEXICAL`;
+- expresiones DAX/RLS ocultas por defecto y disponibles solo bajo demanda;
 - validación de blueprint S510;
 - scanner de secretos con salida redactada;
 - cliente Power Platform configurable;
 - guardas `dry_run`, `confirm` y `ARTEL_ALLOW_WRITES`;
 - respuestas MCP estructuradas;
-- pruebas unitarias y CI.
+- pruebas unitarias y CI en Python 3.11, 3.12 y 3.13.
 
 ## Instalación
 
@@ -82,9 +86,11 @@ Primeras tools recomendadas para cualquier cliente MCP:
 3. `artel_auth_status` para tareas cloud
 4. la tool de dominio más pequeña necesaria
 
+El consumidor no debería necesitar rutas internas, blobs Base64 ni conocer qué cliente REST usa el servidor.
+
 ## Fabric Definition Engine
 
-Tools:
+Tools principales:
 
 - `artel_fabric_list_workspaces`
 - `artel_fabric_list_items`
@@ -92,42 +98,92 @@ Tools:
 - `artel_fabric_get_report_definition`
 - `artel_fabric_get_semantic_model_definition`
 
-La recuperación de definiciones usa las APIs oficiales `getDefinition`. Aunque la operación sea de lectura, Microsoft exige permisos/scopes de lectura-escritura para esas APIs. El MCP no expone `updateDefinition` en esta versión.
-
-Las definiciones devuelven manifiesto compacto por defecto. El contenido PBIR/TMDL solo se incluye cuando se pide expresamente y queda sujeto a un presupuesto global de caracteres.
+Las definiciones se obtienen mediante `getDefinition`. El contenido PBIR/TMDL completo no se devuelve por defecto; se priorizan manifiestos compactos y presupuestos globales de contenido.
 
 ## PBIR Canvas Inspector
 
-El motor geométrico es único para local y Fabric:
+Tools:
 
 - `artel_pbir_inspect_local_canvas`
 - `artel_fabric_inspect_report_canvas`
 
-Revisa por página:
+El mismo motor analiza PBIR local y PBIR recuperado desde Fabric. Revisa:
 
-- `width` / `height` del canvas;
-- número de visuales y grupos;
+- tamaño del canvas;
+- visuales activos y ocultos;
 - visuales fuera de límites;
-- intersecciones entre visuales;
-- pequeñas desviaciones de bordes o centros (`alignment_tolerance`);
-- órdenes de tabulación duplicados;
-- gaps horizontales y verticales frecuentes.
+- overlaps e intersecciones;
+- z-order;
+- pequeños desvíos de alineación entre visuales no superpuestos;
+- `tabOrder` duplicado;
+- patrones de spacing.
 
-La estructura geométrica proviene de los archivos PBIR oficiales `page.json` y `visual.json`. El inspector es read-only y no mueve visuales.
-
-Salida compacta por defecto:
+Los overlaps se clasifican, entre otros, como:
 
 ```text
-page_count
-visual_count
-overlap_count
-bounds_issue_count
-alignment_drift_count
-pages[].findings
-pages[].spacing
+EXPECTED_LAYERING
+POTENTIAL_OCCLUSION
+CONTENT_OVERLAY
+GENERIC_OVERLAP
 ```
 
-Usa `include_visuals=true` únicamente cuando el consumidor necesite cada coordenada individual.
+Un `EXPECTED_LAYERING`, por ejemplo un shape de fondo debajo de contenido, puede registrarse como información sin convertir el canvas completo en `REVIEW`. Un shape por encima de contenido sigue requiriendo revisión.
+
+La salida se limita al `ACTIVE_REPORT_DEFINITION`: respaldos históricos fuera del directorio activo no se mezclan con el reporte vigente.
+
+## TMDL Model Inspector
+
+Tools:
+
+- `artel_tmdl_inspect_local_model`
+- `artel_fabric_inspect_semantic_model`
+
+El inspector procesa la definición TMDL activa y entrega, por defecto, un resumen compacto de:
+
+```text
+table_count
+column_count
+measure_count
+partition_count
+relationship_count
+role_count
+table_permission_count
+rls_present
+rls_secured_tables
+cross_filtering_behavior_counts
+```
+
+Además devuelve las tablas resumidas, las relaciones y los roles/RLS.
+
+Las relaciones incluyen, cuando TMDL lo declara:
+
+- `fromColumn` / `toColumn`;
+- tablas y columnas de origen/destino;
+- `fromCardinality` / `toCardinality`;
+- `crossFilteringBehavior`;
+- `securityFilteringBehavior`;
+- estado activo.
+
+Si la cardinalidad no aparece explícitamente, el inspector devuelve `None` y `cardinality_explicit=false`; no inventa una cardinalidad basada en supuestos.
+
+Las expresiones de medidas y filtros RLS no salen por defecto. Se mantienen metadatos seguros como longitud, hash SHA-256 y referencias léxicas. Para diagnóstico explícito se puede solicitar:
+
+```text
+include_measures=true
+include_columns=true
+include_expressions=true
+```
+
+Las referencias de expresiones se identifican como `STATIC_LEXICAL`: sirven para navegación y auditoría preliminar, no reemplazan al motor Tabular.
+
+La salida marca siempre:
+
+```text
+analysis_mode=STATIC_TMDL
+semantic_runtime_validated=false
+```
+
+Por tanto, detectar un rol o filtro en TMDL **no certifica aislamiento RLS**. La certificación vendedor/usuario requiere ExecuteQueries o evidencia runtime equivalente con la identidad adecuada.
 
 ## Política de escritura
 
@@ -145,7 +201,7 @@ confirm=true
 ARTEL_ALLOW_WRITES=true
 ```
 
-`DELETE` permanece bloqueado. Fabric Definition Engine y PBIR Canvas Inspector siguen siendo read-only.
+`DELETE` permanece bloqueado. Fabric Definition Engine, Canvas Inspector y Model Inspector son read-only.
 
 ## Pruebas
 
@@ -158,14 +214,15 @@ GitHub Actions ejecuta pruebas en Python 3.11, 3.12 y 3.13.
 
 ## Roadmap inmediato
 
-1. **V1.4** — PBIR Canvas Inspector read-only y validación contra PBIP real.
-2. **V1.5** — TMDL Model Inspector: tablas, medidas, relaciones, roles y dependencias.
-3. **V1.6** — Canvas/Model planners `dry_run`: propuestas de cambios sin escribir.
-4. **V1.7+** — escrituras quirúrgicas protegidas con checkpoint, rollback y evidencia.
+1. **V1.5** — TMDL Model Inspector read-only y calibración contra S510 real.
+2. **V1.6** — Canvas/Model planners `dry_run`: propuestas determinísticas de cambio sin escribir.
+3. **V1.7** — checkpoint/diff/rollback y mutaciones PBIR/TMDL locales protegidas.
+4. **V1.8+** — despliegue Fabric `updateDefinition` protegido y evidencia post-deploy.
+5. **Posterior** — Power Automate engine quirúrgico y certificación multi-vendedor/routing.
 
-## Integración
+## Integración para cualquier LLM
 
-Los consumidores no deberían necesitar conocer si una operación se resuelve mediante Python local, REST, Fabric, PAC CLI o automatización visual. El MCP abstrae la implementación y devuelve contratos consistentes.
+El contrato busca que un cliente compatible con MCP pueda comenzar por `artel_list_capabilities`, seleccionar una tool de dominio y recibir un resultado consistente sin conocer si internamente se usó Python local, REST, Fabric, PAC CLI o una automatización visual.
 
 ## Seguridad
 
@@ -178,4 +235,4 @@ Este repositorio no debe contener:
 - connection strings con credenciales;
 - payloads productivos sensibles.
 
-Si el repositorio se mantiene público, no incorporar lógica operacional propietaria que no deba exponerse. Para configuraciones y playbooks internos, usar un repositorio privado o una capa de configuración separada.
+Si el repositorio se mantiene público, no incorporar configuración, identificadores ni lógica operacional propietaria que no deba exponerse. Para configuración ARTEL, playbooks internos, tenant/workspace IDs y material operativo, usar una capa privada separada o convertir el repositorio a privado antes de incorporarlos.
