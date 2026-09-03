@@ -83,7 +83,7 @@ def test_clean_canvas_passes_and_summarizes_spacing():
     assert "visuals" not in page
 
 
-def test_canvas_detects_overlap_out_of_bounds_and_duplicate_tab_order():
+def test_canvas_detects_partial_overlap_out_of_bounds_and_duplicate_tab_order():
     parts = _parts(
         ("a", _visual("a", 10, 10, 100, 80, tab_order=1, z=1)),
         ("b", _visual("b", 90, 10, 100, 80, tab_order=1, z=2)),
@@ -93,9 +93,13 @@ def test_canvas_detects_overlap_out_of_bounds_and_duplicate_tab_order():
     assert result["status"] == "REVIEW"
     page = result["pages"][0]
     assert page["overlap_count"] >= 1
+    assert page["review_overlap_count"] >= 1
     assert page["bounds_issue_count"] == 1
     assert page["duplicate_tab_order_count"] == 1
     assert len(page["visuals"]) == 3
+    overlap = next(f for f in page["findings"] if f["kind"] == "OVERLAP")
+    assert overlap["classification"] == "GENERIC_OVERLAP"
+    assert overlap["requires_review"] is True
     kinds = {finding["kind"] for finding in page["findings"]}
     assert {"OVERLAP", "BOUNDS", "DUPLICATE_TAB_ORDER"} <= kinds
 
@@ -126,7 +130,7 @@ def test_hidden_visuals_are_counted_but_excluded_from_analysis_by_default():
     assert with_hidden["overlap_count"] == 1
 
 
-def test_full_coverage_overlap_contains_layer_context():
+def test_shape_below_content_is_expected_layering_and_does_not_fail_canvas():
     parts = _parts(
         ("background", _visual("background", 10, 10, 120, 100, visual_type="shape", z=1)),
         ("card", _visual("card", 20, 20, 60, 40, visual_type="card", z=2)),
@@ -134,12 +138,46 @@ def test_full_coverage_overlap_contains_layer_context():
     result = inspect_pbir_parts(parts)
     overlap = next(f for f in result["pages"][0]["findings"] if f["kind"] == "OVERLAP")
     assert overlap["coverage_pattern"] == "FULL_COVERAGE"
+    assert overlap["classification"] == "EXPECTED_LAYERING"
+    assert overlap["severity"] == "INFO"
+    assert overlap["requires_review"] is False
     assert overlap["layering_candidate"] is True
-    assert overlap["visual_a_type"] == "shape"
-    assert overlap["visual_b_type"] == "card"
     assert overlap["lower_z_visual"] == "background"
     assert overlap["upper_z_visual"] == "card"
-    assert overlap["visual_a_rect"]["width"] == 120
+    assert overlap["lower_z_visual_type"] == "shape"
+    assert result["expected_layering_count"] == 1
+    assert result["review_overlap_count"] == 0
+    assert result["status"] == "PASS"
+
+
+def test_shape_above_textbox_is_potential_occlusion():
+    parts = _parts(
+        ("text", _visual("text", 10, 10, 100, 80, visual_type="textbox", z=1)),
+        ("shape", _visual("shape", 10, 10, 100, 80, visual_type="shape", z=5)),
+    )
+    result = inspect_pbir_parts(parts)
+    overlap = next(f for f in result["pages"][0]["findings"] if f["kind"] == "OVERLAP")
+    assert overlap["classification"] == "POTENTIAL_OCCLUSION"
+    assert overlap["severity"] == "HIGH"
+    assert overlap["requires_review"] is True
+    assert overlap["upper_z_visual_type"] == "shape"
+    assert result["potential_occlusion_count"] == 1
+    assert result["review_overlap_count"] == 1
+    assert result["status"] == "REVIEW"
+
+
+def test_textbox_above_card_is_content_overlay():
+    parts = _parts(
+        ("card", _visual("card", 10, 10, 100, 80, visual_type="cardVisual", z=4)),
+        ("text", _visual("text", 10, 10, 100, 80, visual_type="textbox", z=7)),
+    )
+    result = inspect_pbir_parts(parts)
+    overlap = next(f for f in result["pages"][0]["findings"] if f["kind"] == "OVERLAP")
+    assert overlap["classification"] == "CONTENT_OVERLAY"
+    assert overlap["severity"] == "MEDIUM"
+    assert overlap["requires_review"] is True
+    assert result["content_overlay_count"] == 1
+    assert result["status"] == "REVIEW"
 
 
 def test_near_alignment_drift_is_reported_with_visual_context():
@@ -155,6 +193,17 @@ def test_near_alignment_drift_is_reported_with_visual_context():
     assert drift["visual_a_type"] == "card"
     assert drift["visual_b_type"] == "table"
     assert drift["delta"] == 2.0
+
+
+def test_alignment_drift_is_not_double_counted_inside_overlap():
+    parts = _parts(
+        ("text", _visual("text", 10, 10, 100, 80, visual_type="textbox", z=1)),
+        ("shape", _visual("shape", 13, 10, 100, 80, visual_type="shape", z=5)),
+    )
+    result = inspect_pbir_parts(parts, alignment_tolerance=3)
+    page = result["pages"][0]
+    assert page["overlap_count"] == 1
+    assert page["alignment_drift_count"] == 0
 
 
 def test_findings_budget_is_global_across_pages():

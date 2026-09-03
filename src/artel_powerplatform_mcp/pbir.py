@@ -12,6 +12,9 @@ from .definitions import decode_definition_parts
 _PAGE_RE = re.compile(r"^definition/pages/([^/]+)/page\.json$", re.IGNORECASE)
 _VISUAL_RE = re.compile(r"^definition/pages/([^/]+)/visuals/([^/]+)/visual\.json$", re.IGNORECASE)
 
+_DECORATIVE_TYPES = {"shape", "basicshape", "image"}
+_TEXT_TYPES = {"textbox"}
+
 
 class PbirInspectionError(RuntimeError):
     """La definición PBIR no puede analizarse de forma determinística."""
@@ -129,7 +132,7 @@ def inspect_pbir_parts(
     include_hidden: bool = False,
     max_findings: int = 100,
 ) -> dict[str, Any]:
-    """Analiza páginas y geometría de visuales PBIR desde partes ya decodificadas."""
+    """Analiza páginas y geometría PBIR con clasificación semántica de overlaps."""
     if alignment_tolerance < 0 or alignment_tolerance > 50:
         raise ValueError("alignment_tolerance debe estar entre 0 y 50.")
     if overlap_min_area < 0:
@@ -158,18 +161,12 @@ def inspect_pbir_parts(
 
     selected_keys = _select_pages(page_docs, page)
     pages: list[dict[str, Any]] = []
-    total_visuals = 0
-    total_analyzed_visuals = 0
-    total_hidden_visuals = 0
-    total_overlaps = 0
-    total_bounds = 0
-    total_alignment_drift = 0
-    total_duplicate_tab_order = 0
+    totals = Counter()
     total_findings = 0
+    total_review_findings = 0
     emitted_findings = 0
 
     for page_key in selected_keys:
-        page_doc = page_docs[page_key]
         visuals = [
             _parse_visual(folder, doc)
             for folder, doc in sorted(visual_docs.get(page_key, []), key=lambda item: item[0])
@@ -177,7 +174,7 @@ def inspect_pbir_parts(
         remaining_budget = max(0, max_findings - emitted_findings)
         page_result = _inspect_page(
             page_key,
-            page_doc,
+            page_docs[page_key],
             visuals,
             alignment_tolerance=alignment_tolerance,
             overlap_min_area=overlap_min_area,
@@ -186,14 +183,24 @@ def inspect_pbir_parts(
             max_findings=remaining_budget,
         )
         pages.append(page_result)
-        total_visuals += page_result["visual_count"]
-        total_analyzed_visuals += page_result["analyzed_visual_count"]
-        total_hidden_visuals += page_result["hidden_visual_count"]
-        total_overlaps += page_result["overlap_count"]
-        total_bounds += page_result["bounds_issue_count"]
-        total_alignment_drift += page_result["alignment_drift_count"]
-        total_duplicate_tab_order += page_result["duplicate_tab_order_count"]
-        total_findings += page_result["finding_count"]
+
+        for key in (
+            "visual_count",
+            "analyzed_visual_count",
+            "hidden_visual_count",
+            "overlap_count",
+            "review_overlap_count",
+            "expected_layering_count",
+            "potential_occlusion_count",
+            "content_overlay_count",
+            "generic_overlap_count",
+            "bounds_issue_count",
+            "alignment_drift_count",
+            "duplicate_tab_order_count",
+        ):
+            totals[key] += int(page_result[key])
+        total_findings += int(page_result["finding_count"])
+        total_review_findings += int(page_result["review_finding_count"])
         emitted_findings += len(page_result["findings"])
 
     return {
@@ -201,19 +208,14 @@ def inspect_pbir_parts(
         "scope": "ACTIVE_REPORT_DEFINITION",
         "page_filter": page,
         "page_count": len(pages),
-        "visual_count": total_visuals,
-        "analyzed_visual_count": total_analyzed_visuals,
-        "hidden_visual_count": total_hidden_visuals,
+        **dict(totals),
         "hidden_visuals_included_in_analysis": include_hidden,
-        "overlap_count": total_overlaps,
-        "bounds_issue_count": total_bounds,
-        "alignment_drift_count": total_alignment_drift,
-        "duplicate_tab_order_count": total_duplicate_tab_order,
         "finding_count": total_findings,
+        "review_finding_count": total_review_findings,
         "findings_emitted": emitted_findings,
         "findings_truncated": total_findings > emitted_findings,
         "pages": pages,
-        "status": "REVIEW" if total_findings else "PASS",
+        "status": "REVIEW" if total_review_findings else "PASS",
     }
 
 
@@ -262,9 +264,8 @@ def _parse_visual(folder: str, doc: dict[str, Any]) -> VisualGeometry:
 
     visual_config = doc.get("visual") if isinstance(doc.get("visual"), dict) else {}
     visual_type = str(visual_config.get("visualType")) if visual_config.get("visualType") else None
-    name = str(doc.get("name") or folder)
     return VisualGeometry(
-        name=name,
+        name=str(doc.get("name") or folder),
         folder=folder,
         visual_type=visual_type,
         rect=rect,
@@ -297,8 +298,11 @@ def _inspect_page(
     tab_order_duplicates = _duplicate_tab_orders(analyzed)
     spacing = _spacing_summary(analyzed)
 
+    review_overlaps = [item for item in overlaps if item["requires_review"]]
     all_findings = [*bounds, *overlaps, *alignment_drift, *tab_order_duplicates]
+    review_findings = [*bounds, *review_overlaps, *alignment_drift, *tab_order_duplicates]
     findings = all_findings[:max_findings] if max_findings > 0 else []
+    classifications = Counter(item["classification"] for item in overlaps)
 
     result: dict[str, Any] = {
         "page_key": page_key,
@@ -313,12 +317,23 @@ def _inspect_page(
         "group_count": sum(1 for visual in visuals if visual.is_group),
         "bounds_issue_count": len(bounds),
         "overlap_count": len(overlaps),
+        "review_overlap_count": len(review_overlaps),
+        "expected_layering_count": classifications["EXPECTED_LAYERING"],
+        "potential_occlusion_count": classifications["POTENTIAL_OCCLUSION"],
+        "content_overlay_count": classifications["CONTENT_OVERLAY"],
+        "generic_overlap_count": sum(
+            count
+            for classification, count in classifications.items()
+            if classification not in {"EXPECTED_LAYERING", "POTENTIAL_OCCLUSION", "CONTENT_OVERLAY"}
+        ),
         "alignment_drift_count": len(alignment_drift),
         "duplicate_tab_order_count": len(tab_order_duplicates),
         "finding_count": len(all_findings),
+        "review_finding_count": len(review_findings),
         "spacing": spacing,
         "findings": findings,
         "findings_truncated": len(all_findings) > len(findings),
+        "status": "REVIEW" if review_findings else "PASS",
     }
     if include_visuals:
         result["visuals"] = [_visual_dict(visual) for visual in visuals]
@@ -367,16 +382,26 @@ def _detect_overlaps(visuals: list[VisualGeometry], min_area: float) -> list[dic
             relation = _overlap_relation(left, right)
             if relation == "GROUP_CONTAINMENT":
                 continue
+
             left_area = left.rect.width * left.rect.height
             right_area = right.rect.width * right.rect.height
             min_visual_area = min(left_area, right_area)
             ratio = area / min_visual_area if min_visual_area > 0 else 1.0
             coverage_pattern = "FULL_COVERAGE" if ratio >= 0.999 else "PARTIAL"
             lower, upper = _layer_order(left, right)
+            classification, severity, requires_review = _classify_overlap(
+                relation=relation,
+                coverage_pattern=coverage_pattern,
+                lower=lower,
+                upper=upper,
+            )
+
             findings.append(
                 {
                     "kind": "OVERLAP",
-                    "severity": "MEDIUM" if relation == "SAME_GROUP" else "HIGH",
+                    "classification": classification,
+                    "severity": severity,
+                    "requires_review": requires_review,
                     "visual_a": left.name,
                     "visual_b": right.name,
                     "visual_a_type": left.visual_type,
@@ -390,11 +415,41 @@ def _detect_overlaps(visuals: list[VisualGeometry], min_area: float) -> list[dic
                     "coverage_pattern": coverage_pattern,
                     "relation": relation,
                     "lower_z_visual": lower.name if lower else None,
+                    "lower_z_visual_type": lower.visual_type if lower else None,
                     "upper_z_visual": upper.name if upper else None,
+                    "upper_z_visual_type": upper.visual_type if upper else None,
                     "layering_candidate": bool(coverage_pattern == "FULL_COVERAGE" and lower and upper),
                 }
             )
     return findings
+
+
+def _classify_overlap(
+    *,
+    relation: str,
+    coverage_pattern: str,
+    lower: VisualGeometry | None,
+    upper: VisualGeometry | None,
+) -> tuple[str, str, bool]:
+    if relation == "SAME_GROUP":
+        return "GROUP_LAYERING", "MEDIUM", True
+    if coverage_pattern != "FULL_COVERAGE" or lower is None or upper is None:
+        return "GENERIC_OVERLAP", "HIGH", True
+
+    lower_type = _normalize_visual_type(lower.visual_type)
+    upper_type = _normalize_visual_type(upper.visual_type)
+
+    if lower_type in _DECORATIVE_TYPES and upper_type not in _DECORATIVE_TYPES:
+        return "EXPECTED_LAYERING", "INFO", False
+    if upper_type in _DECORATIVE_TYPES and lower_type not in _DECORATIVE_TYPES:
+        return "POTENTIAL_OCCLUSION", "HIGH", True
+    if upper_type in _TEXT_TYPES and lower_type not in _DECORATIVE_TYPES:
+        return "CONTENT_OVERLAY", "MEDIUM", True
+    return "FULL_COVERAGE_OVERLAP", "MEDIUM", True
+
+
+def _normalize_visual_type(value: str | None) -> str:
+    return (value or "").replace("_", "").replace("-", "").casefold()
 
 
 def _layer_order(left: VisualGeometry, right: VisualGeometry) -> tuple[VisualGeometry | None, VisualGeometry | None]:
@@ -430,6 +485,10 @@ def _detect_alignment_drift(
     }
     for index, left in enumerate(visuals):
         for right in visuals[index + 1 :]:
+            # La alineación solo es diagnóstica entre visuales separados. Si se superponen,
+            # la diferencia de bordes pertenece al patrón de layering/containment.
+            if _intersection_area(left.rect, right.rect) > 0:
+                continue
             for edge, getter in attributes.items():
                 delta = abs(getter(left) - getter(right))
                 if 0 < delta <= tolerance:
