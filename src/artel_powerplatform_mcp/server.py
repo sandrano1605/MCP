@@ -11,6 +11,7 @@ from .guards import evaluate_mutation
 from .local_audit import inspect_project, scan_for_embedded_secrets, validate_blueprint
 from .models import ToolResult, ok_result
 from .pbir import inspect_pbir_definition, inspect_pbir_parts, load_local_pbir_parts
+from .tmdl import inspect_tmdl_definition, inspect_tmdl_parts, load_local_tmdl_parts
 
 mcp = FastMCP("artel_powerplatform_mcp")
 AUTH_BROKER = AuthBroker()
@@ -23,6 +24,7 @@ CAPABILITIES = [
     {"tool": "artel_auth_complete_device_code", "mode": "auth", "purpose": "Completar Device Code y mantener el token únicamente en memoria."},
     {"tool": "artel_inspect_bi_project", "mode": "read", "purpose": "Inventariar PBIP, TMDL, PBIR, DAX y documentación local."},
     {"tool": "artel_pbir_inspect_local_canvas", "mode": "read", "purpose": "Auditar geometría y calidad de lienzo PBIR desde un proyecto PBIP local."},
+    {"tool": "artel_tmdl_inspect_local_model", "mode": "read", "purpose": "Auditar tablas, medidas, relaciones y RLS TMDL del semantic model local."},
     {"tool": "artel_validate_s510_blueprint", "mode": "read", "purpose": "Validar guardas críticas del blueprint S510."},
     {"tool": "artel_scan_embedded_secrets", "mode": "read", "purpose": "Detectar indicadores de secretos sin devolver sus valores."},
     {"tool": "artel_powerbi_execute_dax", "mode": "cloud-read", "purpose": "Ejecutar una consulta DAX mediante Power BI ExecuteQueries."},
@@ -32,6 +34,7 @@ CAPABILITIES = [
     {"tool": "artel_fabric_get_report_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición PBIR de un Report Fabric."},
     {"tool": "artel_fabric_inspect_report_canvas", "mode": "cloud-read", "purpose": "Auditar el lienzo PBIR de un Report Fabric sin devolver blobs Base64."},
     {"tool": "artel_fabric_get_semantic_model_definition", "mode": "cloud-read", "purpose": "Obtener y resumir la definición TMDL de un Semantic Model Fabric."},
+    {"tool": "artel_fabric_inspect_semantic_model", "mode": "cloud-read", "purpose": "Auditar tablas, relaciones y RLS desde la definición TMDL de Fabric."},
     {"tool": "artel_powerplatform_request", "mode": "guarded-cloud", "purpose": "Invocar una API Power Platform configurada; escrituras requieren triple guarda."},
 ]
 
@@ -64,6 +67,20 @@ def _canvas_tool_result(operation: str, result: dict[str, Any], **metadata: Any)
     )
 
 
+def _model_tool_result(operation: str, result: dict[str, Any], **metadata: Any) -> ToolResult:
+    status = "PASS" if result.get("status") == "PASS" else "WARNING"
+    return ToolResult(
+        ok=True,
+        status=status,
+        operation=operation,
+        data={**metadata, "model": result},
+        findings=result.get("findings", []),
+        warnings=[
+            "La auditoría TMDL es estática; RLS, cardinalidad efectiva y propagación deben certificarse en runtime."
+        ] if status == "WARNING" else [],
+    )
+
+
 @mcp.tool(
     name="artel_list_capabilities",
     annotations={"title": "Descubrir capacidades ARTEL MCP", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
@@ -73,7 +90,7 @@ async def artel_list_capabilities() -> ToolResult:
     return ok_result(
         "artel_list_capabilities",
         status="PASS",
-        data={"server": "artel_powerplatform_mcp", "contract_version": "1.4", "capabilities": CAPABILITIES},
+        data={"server": "artel_powerplatform_mcp", "contract_version": "1.5", "capabilities": CAPABILITIES},
     )
 
 
@@ -171,6 +188,40 @@ async def artel_pbir_inspect_local_canvas(
         result,
         source="local",
         report=selected_report,
+    )
+
+
+@mcp.tool(
+    name="artel_tmdl_inspect_local_model",
+    annotations={"title": "Auditar modelo TMDL local", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def artel_tmdl_inspect_local_model(
+    project_path: str | None = None,
+    semantic_model_name: str | None = None,
+    include_measures: bool = False,
+    include_columns: bool = False,
+    include_expressions: bool = False,
+    max_expression_chars: int = 2_000,
+    max_items: int = 500,
+) -> ToolResult:
+    """Audita el TMDL activo: tablas, medidas, relaciones, filtros bidireccionales y roles/RLS."""
+    selected_model, parts = load_local_tmdl_parts(
+        _project_path(project_path),
+        semantic_model_name=semantic_model_name,
+    )
+    result = inspect_tmdl_parts(
+        parts,
+        include_measures=include_measures,
+        include_columns=include_columns,
+        include_expressions=include_expressions,
+        max_expression_chars=max_expression_chars,
+        max_items=max_items,
+    )
+    return _model_tool_result(
+        "artel_tmdl_inspect_local_model",
+        result,
+        source="local",
+        semantic_model=selected_model,
     )
 
 
@@ -352,6 +403,44 @@ async def artel_fabric_get_semantic_model_definition(
         "artel_fabric_get_semantic_model_definition",
         status="PASS",
         data={"workspace_id": workspace_id, "semantic_model_id": semantic_model_id, "definition": definition},
+    )
+
+
+@mcp.tool(
+    name="artel_fabric_inspect_semantic_model",
+    annotations={"title": "Auditar modelo TMDL Fabric", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+async def artel_fabric_inspect_semantic_model(
+    workspace_id: str,
+    semantic_model_id: str,
+    include_measures: bool = False,
+    include_columns: bool = False,
+    include_expressions: bool = False,
+    max_expression_chars: int = 2_000,
+    max_items: int = 500,
+    max_polls: int = 20,
+) -> ToolResult:
+    """Recupera TMDL desde Fabric y audita el modelo dentro del MCP sin exponer Base64."""
+    response = await _fabric_client().get_semantic_model_definition(
+        workspace_id,
+        semantic_model_id,
+        definition_format="TMDL",
+        max_polls=max_polls,
+    )
+    result = inspect_tmdl_definition(
+        response,
+        include_measures=include_measures,
+        include_columns=include_columns,
+        include_expressions=include_expressions,
+        max_expression_chars=max_expression_chars,
+        max_items=max_items,
+    )
+    return _model_tool_result(
+        "artel_fabric_inspect_semantic_model",
+        result,
+        source="fabric",
+        workspace_id=workspace_id,
+        semantic_model_id=semantic_model_id,
     )
 
 
