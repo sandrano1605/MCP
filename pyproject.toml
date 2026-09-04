@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "artel-powerplatform-mcp"
-version = "0.1.7"
-description = "Servidor MCP read-first para auditar, certificar y planificar Power BI, PBIR/TMDL, Fabric y Power Automate de forma controlada."
+version = "0.1.8"
+description = "Servidor MCP read-first para orquestar Power BI/Fabric oficial de Microsoft, PBIR/TMDL, Power Automate y evidencia ARTEL de forma controlada."
 requires-python = ">=3.11"
 dependencies = [
   "httpx>=0.27,<1",
@@ -20,7 +20,7 @@ dev = [
 ]
 
 [project.scripts]
-artel-powerplatform-mcp = "artel_powerplatform_mcp.app:main"
+artel-powerplatform-mcp = "artel_powerplatform_mcp.app_v18:main"
 artel-certify = "artel_powerplatform_mcp.cert_cli:main"
 artel-runtime-certify = "artel_powerplatform_mcp.runtime_cli:main"
 
