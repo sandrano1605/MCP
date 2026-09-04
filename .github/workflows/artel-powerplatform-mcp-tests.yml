@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "feature/artel-powerplatform-mcp-*"
+      - "feature/artel-mcp-*"
   pull_request:
     branches:
       - main
@@ -38,8 +39,11 @@ jobs:
       - name: Compile package
         run: python -m compileall -q src
 
-      - name: Import composed MCP
+      - name: Import legacy composed MCP
         run: python -c "from artel_powerplatform_mcp.app import mcp; print('APP_IMPORT=PASS')"
+
+      - name: Import V1.8 integrated MCP
+        run: python -c "from artel_powerplatform_mcp.app_v18 import mcp; print('APP_V18_IMPORT=PASS')"
 
       - name: Run tests
         run: python -m pytest
