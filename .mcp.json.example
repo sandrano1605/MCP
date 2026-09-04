@@ -1,5 +1,16 @@
 {
   "mcpServers": {
+    "powerbi-modeling-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@microsoft/powerbi-modeling-mcp@latest",
+        "--start",
+        "--readonly"
+      ],
+      "tools": ["*"]
+    },
     "windows-capture": {
       "type": "stdio",
       "command": "C:/ruta/a/.venv/Scripts/python.exe",
