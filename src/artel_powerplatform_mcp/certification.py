@@ -92,12 +92,14 @@ def certify_local_bi(
     flow_path: Path | None = None,
     expect_rls: bool = False,
     max_findings: int = 100,
+    report_name: str | None = None,
+    semantic_model_name: str | None = None,
 ) -> dict[str, Any]:
     """Audita un PBIP real de punta a punta sin modificar archivos ni ejecutar cloud."""
     inventory = inspect_project(project_path)
-    report_name, pbir_parts = load_local_pbir_parts(project_path)
+    report_name, pbir_parts = load_local_pbir_parts(project_path, report_name=report_name)
     canvas = inspect_pbir_parts(pbir_parts, include_visuals=False, max_findings=max_findings)
-    model_name, tmdl_parts = load_local_tmdl_parts(project_path)
+    model_name, tmdl_parts = load_local_tmdl_parts(project_path, semantic_model_name=semantic_model_name)
     model = inspect_tmdl_parts(tmdl_parts, include_measures=True, include_columns=False, max_items=5000)
     security = assess_model_policy(model, expect_rls=expect_rls)
     plan = build_combined_plan(model=model, canvas=canvas, expect_rls=expect_rls)
