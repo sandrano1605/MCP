@@ -37,6 +37,11 @@ def build_server(plane=None):
         return safe(lambda:ctrl.context(agent_id))
 
     @mcp.tool()
+    def central_recovery_diagnosis(agent_id:int)->dict:
+        """Read-only V5.7.6 SOLO/Sígueme safe-path diagnosis for one agent."""
+        return safe(lambda:ctrl.recovery_diagnosis(agent_id))
+
+    @mcp.tool()
     def central_orchestrator_plan()->dict:
         """Read-only contextual plan for all six agents; never resends."""
         return safe(ctrl.orchestrator_plan)
