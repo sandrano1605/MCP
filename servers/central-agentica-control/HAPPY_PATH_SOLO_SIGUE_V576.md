@@ -76,3 +76,7 @@ python smoke_stdio.py
 ~~~
 
 **Restricciones permanentes:** no SAP COMMIT, no PRD/escrituras externas sin gates, no Repeat/Retry automático ante incertidumbre; los archivos de conversaciones, credenciales, SQLite y capturas operativas permanecen únicamente en el host autorizado.
+
+## 7. Reincidencia después de una restauración inicialmente correcta
+
+En una lectura posterior, el agente de MRP que había restaurado el mismo `run_id` avanzó hasta la iteración 24 y volvió a entrar en `WAITING_SAFE_WORK` con `RESPONSE_TIMEOUT_UNCONFIRMED`. **La restauración de la iteración 23 funcionó como transición verificable, pero no constituyó una reparación permanente del mecanismo de entrega.** Ante esta nueva falla, el diagnóstico debe regresar a `RECONCILE_UNCERTAIN`, nunca reintentar por el hecho de haber restaurado antes. Prueba de regresión: `test_a4_restored_same_run_can_timeout_again_without_authorizing_retry`. La próxima integración Qt debe validar estabilidad durante varias iteraciones, no solo el primer ACK.
