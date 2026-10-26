@@ -35,3 +35,15 @@ Nunca cerrar por porcentaje o señal visual; exigir `done` con evidencia y pendi
 ## I. Control Git
 Solo versionar código/test/doc sin tokens, cookies, sesiones, dumps o historiales de conversación.
 No hacer push del perfil activo. Validar `git status` antes de cualquier commit. Mantener respaldo independiente del SQLite.
+
+## J. Camino feliz SOLO/Sígueme y actualización
+
+Antes de cualquier upgrade o intento de recuperar un agente: leer
+`HAPPY_PATH_SOLO_SIGUE_V576.md`, ejecutar `python cli.py recovery-diagnosis <agente>`
+y contrastar la decisión con `GET /api/recovery/status` y `task-state`.
+El contrato `recovery_protocol_v576.py` es de **solo lectura**. Un agente
+activo con respuesta en curso => OBSERVE_STREAM; un borrador tras error =>
+PRESERVE_DRAFT; un mensaje incierto => RECONCILE_UNCERTAIN, nunca Retry.
+Para habilitar un nuevo camino feliz debe existir prueba de regresión y un
+piloto QAS; los criterios de release están versionados en
+`UPGRADE_SOLO_SIGUE_V576.json`.
