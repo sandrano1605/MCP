@@ -73,3 +73,14 @@ Ejemplo de configuración: `mcp.config.example.json`. Registrar el servidor en u
 - Las operaciones mutables se consideran **aceptadas** cuando responde la API, y solo **verificadas** tras nueva lectura.
 
 Ver `OPERACIONES.md`, `ARQUITECTURA.md`, `CAMBIOS.md` y `ESTADO_PROYECTO.json`.
+
+## Camino feliz de continuidad y upgrade V5.7.6
+
+Consultar [HAPPY_PATH_SOLO_SIGUE_V576.md](HAPPY_PATH_SOLO_SIGUE_V576.md) y
+[UPGRADE_SOLO_SIGUE_V576.json](UPGRADE_SOLO_SIGUE_V576.json) antes de ajustar
+la función SOLO/Sígueme. La nueva herramienta de consulta
+`central_recovery_diagnosis(agent_id)` (CLI: `python cli.py recovery-diagnosis 3`)
+clasifica bloqueos sin reenviar mensajes ni alterar la sesión.
+
+**Importante:** módulo de decisión comprobado con 46 tests y humo MCP de 13 herramientas;
+la integración automática Qt en V5.7.6 **aún no está desplegada**.
