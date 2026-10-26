@@ -126,6 +126,26 @@ class PlaneTests(unittest.TestCase):
     def test_start_does_not_duplicate_active_db_run(self):
         with self.assertRaisesRegex(Refused,"PREVIOUS_RUN_NEEDS_RECONCILIATION"):
             self.plane.prepare_start(4)
+    def test_start_uncertain_previous_run_never_duplicated(self):
+        db=sqlite3.connect(self.dbroot/"task_memory_v3.sqlite3")
+        db.execute("UPDATE runs SET state=? WHERE id=?",
+            ("RESPONSE_TIMEOUT_UNCONFIRMED",RUN))
+        db.commit();db.close()
+        with self.assertRaisesRegex(Refused,"PREVIOUS_RUN_NEEDS_RECONCILIATION"):
+            self.plane.prepare_start(4)
+
+    def test_safe_terminal_run_can_prepare_contextual_solo(self):
+        db=sqlite3.connect(self.dbroot/"task_memory_v3.sqlite3")
+        db.execute("UPDATE runs SET state=? WHERE id=?",("TIME_LIMIT",RUN))
+        db.commit();db.close()
+        p=self.plane.prepare_start(4,mode="solo")
+        self.assertEqual(p["status"],"PREPARED")
+        res=self.plane.approve(p["approval_token"],"APROBAR_CAMBIO_CONTROLADO")
+        self.assertEqual(res["action"],"start")
+        body=[b for path,b in self.api.calls if path=="/api/autosigue/start"][0]
+        self.assertTrue(body["solo_enabled"])
+        self.assertIn("safe",body["prompt_a"].lower())
+
     def test_context_no_full_chat_text(self):
         c=self.plane.context(4)
         self.assertEqual(c["runs"][0]["run_id"],RUN)
