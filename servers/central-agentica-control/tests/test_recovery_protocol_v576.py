@@ -61,6 +61,17 @@ class RecoveryProtocolTests(unittest.TestCase):
            "transport_failed":"RESPONSE_TIMEOUT_UNCONFIRMED"})
         self.assertEqual(x["action"],"RECONCILE_UNCERTAIN")
 
+    def test_a4_restored_same_run_can_timeout_again_without_authorizing_retry(self):
+        # A successful earlier restore is not an unlimited replay permission.
+        # The same run may enter WAITING_SAFE_WORK again on a later turn.
+        a={**BASE,"active":True,"phase":"WAITING_SAFE_WORK",
+           "transport_failed":"RESPONSE_TIMEOUT_UNCONFIRMED","run_id":RUN}
+        d={**DOM,"finalized":True,"lastAssistantAfterLastUser":True}
+        verdict_now=verdict(a=a,d=d)
+        self.assertEqual(verdict_now["action"],"RECONCILE_UNCERTAIN")
+        self.assertFalse(verdict_now["safe_to_resend"])
+        self.assertFalse(verdict_now["can_prepare_restore"])
+
     def test_repeated_click_after_unknown_error_is_not_authorized(self):
         x=verdict(d={**DOM,"blocked":True,"alerts":"Unknown error Retry"})
         self.assertEqual(x["action"],"RECONCILE_ERROR")
