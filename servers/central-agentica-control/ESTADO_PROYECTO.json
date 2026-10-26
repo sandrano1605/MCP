@@ -1,9 +1,9 @@
 {
   "name": "Central Agentica MCP Orquestador",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "date": "2026-10-26",
   "scope": "6 agentes, Sigue/SOLO, recuperacion verificada, monitor, mejora continua",
-  "status": "A1_A2_A4_ACTIVE_A3_SAFE_WAIT_MONITOR_P44604_FIX001_TESTED",
+  "status": "SOLO_SIGUE_V576_HAPPY_PATH_DOCUMENTED_TESTED_NOT_DEPLOYED_IN_QT",
   "constraints": [
     "No automatic resend of uncertain sends",
     "No SAP COMMIT",
@@ -16,7 +16,6 @@
     "Implemented MCP stdio server, CLI, supervisor and improvement playbooks",
     "MCP stdio handshake real live: 12 tools + 3 readonly calls PASS",
     "Six panels enabled in Central Agentica V5.7.5; old run IDs 1-4 preserved",
-    "Independent monitor PID 15840 running, 60-second poll and heartbeat verified",
     "Source files and docs committed to GitHub MCP draft PR #11",
     "High-level context-aware orchestrator plan detects safe Solo A5 and uncertain A6",
     "Started agent 5 SOLO from verified TIME_LIMIT checkpoint; confirmed RESPONSE/1 iteration and no error",
@@ -24,10 +23,16 @@
     "Read-only and safety tests: 24/24 PASS",
     "MCP real stdio discovery 12 tools and three read-only calls PASS",
     "Supervisor health now detects CHATGPT_ERROR / NO_TELEMETRY / NO_PROGRESS (verified against live agent error)",
-    "26-10-2026: reviewed A1-A4 via live API, checkpoints and DOM; A1 A2 A4 progressing; A3 unresolved timeout with draft",
-    "FIX-001 live slow-stream classification corrected (LENTO + generating = ACTIVE); local unit tests 25/25 PASS",
-    "Independent supervisor safely replaced by PID 44604 (60 sec) and verified running; agents and GUI preserved",
-    "RCA, safe actions and planned fixes committed to branch and PR #11"
+    "Independent supervisor PID 40364 running at 60-second cadence with current heartbeat",
+    "FIX-001: LENTO with generating=true is ACTIVE, regression 25/25 PASS",
+    "Sidecar restarted and verified PID 44604; no agent interrupted",
+    "A1/A2/A4 online, A3 protected WAITING_SAFE_WORK (timeout and draft)",
+    "RCA and continuous-improvement matrix committed in GitHub MCP PR #11",
+    "A4 verified same-run recovery procedure documented with evidence",
+    "A5 verified project reassignment SOLO procedure documented with evidence",
+    "A3 unknown-error/draft failure documented as preserved NO-GO",
+    "Read-only V5.7.6 recovery diagnosis added to MCP and CLI",
+    "46 isolated unittest cases passing; MCP stdio 13 tools and 4 read-only calls passing"
   ],
   "pending": [
     "Review/merge Github MCP PR #11 after code review",
@@ -35,49 +40,35 @@
     "Register MCP as ChatGPT private connector or configure secure supported tunnel",
     "Install user-logon autostart if approved",
     "Certify recovery under actual interruption in a disposable QAS test",
-    "Reconcile A6 previous RESPONSE_TIMEOUT_UNCONFIRMED; no resend until final confirmation",
-    "FIX-002 A3: reconcile RESPONSE_TIMEOUT_UNCONFIRMED + persistent draft with owned final checkpoint before any send",
-    "FIX-003 A4: safely activate/certify protected GET for QAS exception matrix (HTTP 405) with no SAP writes",
-    "FIX-004: detect sustained no-progress using DOM signature and time, deduplicating incidents"
+    "FIX-002: reconcile A3 timeout/draft before any send",
+    "FIX-003: certify A4 QAS endpoint GET after controlled activation",
+    "FIX-004: temporal stall detection with deduplication",
+    "Reconcile A6 previous RESPONSE_TIMEOUT_UNCONFIRMED before any send",
+    "Implement atomic Qt same-run restore under isolated V5.7.6 candidate",
+    "Implement safe cross-project assignment/recovery in Qt with backup and delivery idempotency",
+    "Integrate persisted draft+ACK reconciliation for ChatGPT unknown error/timeout",
+    "Pass QAS canary and rollback rehearsal before installing V5.7.6"
   ],
   "evidence": [
     {
       "test": "python -m unittest discover -s tests -p test_*.py -q",
-      "result": "24/24 PASS"
+      "result": "46/46 PASS"
     },
     {
       "test": "python smoke_stdio.py",
-      "result": "MCP stdio PASS, 12 tools, 3 read calls"
+      "result": "MCP stdio 13 tools / 4 readonly calls PASS"
     },
     {
-      "check": "AF9328 API",
-      "result": "PASS",
-      "panels": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-      ]
+      "check": "Live A3 diagnostic after controlled reload",
+      "result": "PRESERVE_DRAFT, 0 sends"
     },
     {
-      "check": "watcher",
-      "pid": 44604,
-      "result": "running, --daemon --interval 60"
+      "check": "Live A4/5 diagnostic while generating",
+      "result": "OBSERVE_STREAM, 0 sends"
     },
     {
-      "test": "python -m unittest discover -s tests -p test_*.py -v",
-      "result": "25/25 PASS"
-    },
-    {
-      "check": "live A1-A4 after FIX-001",
-      "result": "A1 active 11/100, A2 active 71/100, A3 timeout uncertain 10/100, A4 active 24/100"
-    },
-    {
-      "check": "incident report",
-      "path": "INCIDENTES_AGENTES_1_4_20261026.md",
-      "result": "committed and linked in PR #11"
+      "check": "Local runbook",
+      "result": "HAPPY_PATH_SOLO_SIGUE_V576.md and UPGRADE_SOLO_SIGUE_V576.json present"
     }
   ],
   "git": {
@@ -86,5 +77,13 @@
     "pull_request": 11,
     "draft": true,
     "private_operational_repo": "PENDING"
+  },
+  "target_release": "V5.7.6",
+  "installed_qt_version": "V5.7.5-recovery-candidate",
+  "upgrade_spec": {
+    "runbook": "HAPPY_PATH_SOLO_SIGUE_V576.md",
+    "machine_readable": "UPGRADE_SOLO_SIGUE_V576.json",
+    "module": "recovery_protocol_v576.py",
+    "integration": "PENDING_QT"
   }
 }
