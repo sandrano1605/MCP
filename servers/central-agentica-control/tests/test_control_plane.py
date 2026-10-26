@@ -189,6 +189,14 @@ class PlaneTests(unittest.TestCase):
         self.assertEqual(action6,"RECONCILE_PREVIOUS_RUN")
         self.assertNotIn("/api/prompt",[route for route,_ in self.api.calls])
 
+    def test_no_progress_has_explicit_incident_code(self):
+        self.api.health["1"]["label"]="LENTO"
+        self.api.follow["1"].update(is_active=True,phase="RESPONSE")
+        output=Supervisor(self.plane).poll()
+        self.assertEqual(output["agents"]["1"]["classification"],"NO_PROGRESS")
+        incident=self.plane.issues_file.read_text(encoding="utf8")
+        self.assertIn('"code": "NO_PROGRESS"',incident)
+
     def test_auto_incident_captured_once_on_change(self):
         self.api.health["4"]["label"]="LENTO"
         self.api.follow["4"].update(is_active=True,phase="RESPONSE")
