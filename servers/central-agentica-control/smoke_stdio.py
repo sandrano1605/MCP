@@ -32,9 +32,16 @@ async def main():
             assert len(value.get("agents",{}))==6
             one=await session.call_tool("central_agent_status",arguments={"agent_id":1,"with_browser":False})
             assert not one.isError
+            plan=await session.call_tool("central_orchestrator_plan",arguments={})
+            assert not plan.isError
+            pcontent=plan.structuredContent
+            if not pcontent:
+                pcontent=json.loads(getattr(plan.content[0],"text","{}"))
+            pvalue=pcontent.get("result",pcontent)
+            assert len(pvalue.get("agents",[]))==6
             print(json.dumps({"mcp_protocol":"PASS","tools":len(names),
                     "tool_names":names,"version":value["version"],
-                    "panels":value.get("panels"),"read_only_checks":2},
+                    "panels":value.get("panels"),"read_only_checks":3},
                     ensure_ascii=False))
 
 if __name__=="__main__":asyncio.run(main())
