@@ -105,6 +105,26 @@ class Supervisor:
                     f.write(json.dumps(item,ensure_ascii=False)+"\n")
         return snapshot
 
+def _single_instance_lock(path):
+    """Hold an OS-level lock during daemon lifetime (no duplicate watcher)."""
+    path.parent.mkdir(parents=True,exist_ok=True)
+    lock=path.open("a+b")
+    try:
+        lock.seek(0,2)
+        if lock.tell()==0:
+            lock.write(b"0");lock.flush()
+        lock.seek(0)
+        if os.name=="nt":
+            import msvcrt
+            msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+        else:
+            import fcntl
+            fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+        return lock
+    except (OSError,IOError) as exc:
+        lock.close()
+        raise RuntimeError("SUPERVISOR_ALREADY_RUNNING") from exc
+
 def main():
     cli=argparse.ArgumentParser()
     cli.add_argument("--once",action="store_true")
@@ -116,6 +136,7 @@ def main():
     if not ns.daemon:
         print(json.dumps(sup.poll(),ensure_ascii=False))
         return
+    lock=_single_instance_lock(sup.plane.state/"supervisor.lock")
     print(json.dumps({"status":"SUPERVISOR_STARTED","interval":ns.interval}),
           flush=True)
     while True:
