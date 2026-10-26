@@ -75,7 +75,8 @@ class Supervisor:
             if a["iteration"]>=a["max_iterations"]:return "LIMIT_REACHED"
         if db.get("outcome")=="UNVERIFIED_CLOSE":return "UNVERIFIED_CLOSE"
         if db.get("outcome")=="DONE_CONFIRMED":return "DONE_CONFIRMED"
-        if a["active"] and a["health"]=="LENTO":return "NO_PROGRESS"
+        if a["active"] and a["health"]=="LENTO" and not a["generating"]:
+            return "NO_PROGRESS"
         if a["active"]:return "ACTIVE"
         return "IDLE"
 
