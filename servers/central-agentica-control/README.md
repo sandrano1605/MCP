@@ -54,6 +54,15 @@ python server.py
 
 Ejemplo de configuración: `mcp.config.example.json`. Registrar el servidor en un cliente MCP compatible. **No está instalado automáticamente como conector remoto de ChatGPT**: requiere configuración/autenticación de la integración y un túnel seguro si el cliente se ejecuta fuera del equipo. No publicar el puerto 8792.
 
+## Validación de la versión
+
+- **21/21** pruebas unitarias aprobadas.
+- MCP real vía stdio: **12 herramientas**, handshake y **3 llamadas de solo lectura** comprobadas.
+- Central Agéntica V5.7.5: seis paneles montados, 1–4 conservados y 5 reactivado por contexto.
+- A6: última ejecución `RESPONSE_TIMEOUT_UNCONFIRMED`; se mantiene pendiente de conciliación, sin reenvío.
+- Monitor separado activo cada 60 segundos. Vigilancia consolidada en ChatGPT cada hora; las notificaciones push dependen de los ajustes del usuario.
+- Desarrollo GitHub: PR borrador `sandrano1605/MCP#11`. La aplicación completa requiere un remoto Git **privado** separado.
+
 ## Seguridad y límites
 
 - No tiene herramientas de shell arbitrario, JS arbitrario, Retry, borrado de sesión o despliegue PRD/SAP.
