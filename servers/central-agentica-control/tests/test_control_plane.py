@@ -200,6 +200,23 @@ class PlaneTests(unittest.TestCase):
         sup.poll()
         self.assertEqual(len(self.plane.issues_file.read_text(encoding="utf8").splitlines()),n)
 
+    def test_chatgpt_error_not_falsely_active(self):
+        self.api.health["3"]["label"]="ERROR"
+        self.api.follow["3"].update(is_active=True,phase="RESPONSE",current_iteration=10)
+        result=Supervisor(self.plane).poll()
+        self.assertEqual(result["agents"]["3"]["classification"],"CHATGPT_ERROR")
+        self.assertEqual(result["agents"]["3"]["intervention"],
+                         "Inspect visible ChatGPT error; preserve draft and reconcile prior turn")
+        issues=self.plane.issues_file.read_text(encoding="utf8")
+        self.assertIn("RESPONSE_UNVERIFIED",issues)
+        self.assertNotIn("/api/prompt",[route for route,_ in self.api.calls])
+
+    def test_missing_telemetry_never_active(self):
+        self.api.health["1"]["label"]="SIN DATOS"
+        self.api.follow["1"]["is_active"]=True
+        result=Supervisor(self.plane).poll()
+        self.assertEqual(result["agents"]["1"]["classification"],"NO_TELEMETRY")
+
     def test_mcp_import(self):
         from server import build_server
         m=build_server(self.plane)
