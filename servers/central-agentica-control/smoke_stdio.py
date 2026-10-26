@@ -39,9 +39,18 @@ async def main():
                 pcontent=json.loads(getattr(plan.content[0],"text","{}"))
             pvalue=pcontent.get("result",pcontent)
             assert len(pvalue.get("agents",[]))==6
+            diag=await session.call_tool("central_recovery_diagnosis",arguments={"agent_id":3})
+            assert not diag.isError
+            dcontent=diag.structuredContent
+            if not dcontent:
+                dcontent=json.loads(getattr(diag.content[0],"text","{}"))
+            dvalue=dcontent.get("result",dcontent)
+            assert dvalue.get("agent")==3
+            assert dvalue.get("mutations")==0
+            assert dvalue.get("decision",{}).get("safe_to_resend") is False
             print(json.dumps({"mcp_protocol":"PASS","tools":len(names),
                     "tool_names":names,"version":value["version"],
-                    "panels":value.get("panels"),"read_only_checks":3},
+                    "panels":value.get("panels"),"read_only_checks":4},
                     ensure_ascii=False))
 
 if __name__=="__main__":asyncio.run(main())
