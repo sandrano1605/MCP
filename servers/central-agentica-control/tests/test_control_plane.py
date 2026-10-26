@@ -173,6 +173,22 @@ class PlaneTests(unittest.TestCase):
         sup=Supervisor(self.plane)
         self.assertEqual(len(sup.poll()["material_changes"]),6)
         self.assertEqual(sup.poll()["material_changes"],[])
+    def test_orchestrator_contextual_six_agent_plan(self):
+        self.api.panels=list(range(1,7))
+        db=sqlite3.connect(self.dbroot/"task_memory_v3.sqlite3")
+        rid="b"*32
+        db.execute("INSERT INTO runs VALUES(?,?,?,?,?)",
+            (rid,"Legacy external task","followup","RESPONSE_TIMEOUT_UNCONFIRMED",time.time()))
+        db.execute("INSERT INTO turns(run,agent,url,turn,text,checkpoint,created) VALUES(?,?,?,?,?,?,?)",
+            (rid,6,URL,"3","Uncertain response",json.dumps(self.cp),time.time()))
+        db.commit();db.close()
+        plan=self.plane.orchestrator_plan()
+        self.assertFalse(plan["state_changes"])
+        self.assertEqual(len(plan["agents"]),6)
+        action6=plan["agents"][5]["action"]
+        self.assertEqual(action6,"RECONCILE_PREVIOUS_RUN")
+        self.assertNotIn("/api/prompt",[route for route,_ in self.api.calls])
+
     def test_auto_incident_captured_once_on_change(self):
         self.api.health["4"]["label"]="LENTO"
         self.api.follow["4"].update(is_active=True,phase="RESPONSE")
