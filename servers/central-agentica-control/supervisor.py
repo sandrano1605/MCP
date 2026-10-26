@@ -19,7 +19,9 @@ INCIDENT_TYPES = {
     "NO_PROGRESS":"Inspect response, rate limit, checkpoint; do not infer failure",
     "TIMEOUT_UNCONFIRMED":"Do not replay the last instruction; reconcile first",
     "LIMIT_REACHED":"Inspect verified checkpoint and plan context rollover",
-    "UNVERIFIED_CLOSE":"Task closure requires final checkpoint and evidence"
+    "UNVERIFIED_CLOSE":"Task closure requires final checkpoint and evidence",
+    "CHATGPT_ERROR":"Inspect visible ChatGPT error; preserve draft and reconcile prior turn",
+    "NO_TELEMETRY":"Inspect DOM renderer and session before considering any resume"
 }
 COMPLETED_RUN_STATES = {"DECLARED_DONE_WITH_EVIDENCE"}
 
@@ -63,6 +65,12 @@ class Supervisor:
             return "FAILED_TRANSPORT"
         if a["dom_age"] is None or a["dom_age"]>180:
             return "DOM_STALE"
+        # Chat UI errors are not transport failures. Never call an errored
+        # conversation ACTIVE merely because auto-follow remains enabled.
+        if str(a.get("health") or "").upper() in ("ERROR","FALLO"):
+            return "CHATGPT_ERROR"
+        if str(a.get("health") or "").upper() in ("SIN DATOS","NO DATA"):
+            return "NO_TELEMETRY"
         if a["active"] and a["iteration"] is not None and a["max_iterations"] is not None:
             if a["iteration"]>=a["max_iterations"]:return "LIMIT_REACHED"
         if db.get("outcome")=="UNVERIFIED_CLOSE":return "UNVERIFIED_CLOSE"
@@ -110,7 +118,9 @@ class Supervisor:
                 "DOM_STALE":"DOM_UNAVAILABLE",
                 "NO_PROGRESS":"OTHER",
                 "LIMIT_REACHED":"CONTEXT_LIMIT",
-                "UNVERIFIED_CLOSE":"RESPONSE_UNVERIFIED"
+                "UNVERIFIED_CLOSE":"RESPONSE_UNVERIFIED",
+                "CHATGPT_ERROR":"RESPONSE_UNVERIFIED",
+                "NO_TELEMETRY":"DOM_UNAVAILABLE"
             }
             for row in changes:
                 aid=str(row["agent"])
