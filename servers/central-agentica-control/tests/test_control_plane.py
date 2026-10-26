@@ -208,6 +208,16 @@ class PlaneTests(unittest.TestCase):
         sup.poll()
         self.assertEqual(len(self.plane.issues_file.read_text(encoding="utf8").splitlines()),n)
 
+    def test_slow_health_with_live_generation_is_not_stall(self):
+        # La etiqueta LENTO por sí sola no prueba una detención.
+        self.api.health["4"]["label"]="LENTO"
+        self.api.health["4"]["generating"]=True
+        self.api.follow["4"].update(is_active=True,phase="RESPONSE")
+        result=Supervisor(self.plane).poll()
+        self.assertEqual(result["agents"]["4"]["classification"],"ACTIVE")
+        issues=self.plane.issues_file
+        self.assertFalse(issues.exists() and "NO_PROGRESS" in issues.read_text(encoding="utf8"))
+
     def test_chatgpt_error_not_falsely_active(self):
         self.api.health["3"]["label"]="ERROR"
         self.api.follow["3"].update(is_active=True,phase="RESPONSE",current_iteration=10)
