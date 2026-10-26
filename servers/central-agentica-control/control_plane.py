@@ -393,7 +393,7 @@ class Plane:
         aid=validate_agent(aid)
         allowed={"DOM_UNAVAILABLE","DRAFT_CHANGED","TIMEOUT_UNCONFIRMED",
                  "CONTEXT_LIMIT","RATE_LIMIT","LOGIN_REQUIRED",
-                 "RESPONSE_UNVERIFIED","RENDERER_MISSING","OTHER"}
+                 "RESPONSE_UNVERIFIED","RENDERER_MISSING","NO_PROGRESS","OTHER"}
         if code not in allowed:raise Refused("INCIDENT_CODE_UNKNOWN")
         row={"at":time.time(),"agent":aid,"code":code,
              "evidence":str(evidence or "")[:300],"regression":"PENDING",
