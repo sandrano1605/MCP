@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "date": "2026-10-26",
   "scope": "6 agentes, Sigue/SOLO, recuperacion verificada, monitor, mejora continua",
-  "status": "testing",
+  "status": "MCP_LOCAL_VERIFIED_GITHUB_PR_PENDING",
   "constraints": [
     "No automatic resend of uncertain sends",
     "No SAP COMMIT",
@@ -12,15 +12,46 @@
     "Two-stage mutations"
   ],
   "completed": [
-    "GitHub inventory inspected",
-    "MCP/CLI/supervisor source created",
-    "Unit tests created"
+    "GitHub inventory reviewed (existing public MCP windows-capture, no central agentica server)",
+    "Local MCP stdio server with 11 tools implemented",
+    "Unit regression: 17/17 PASS",
+    "Real MCP stdio handshake and two read-only calls PASS",
+    "Panel layout expanded to six, original runs 1-4 preserved",
+    "Independent supervisor daemon started, PID confirmed, heartbeat recent",
+    "Generic source pushed to Github MCP feature branch"
   ],
   "pending": [
-    "Regression pass",
-    "Live 6-panel smoke test",
-    "GitHub branch commit",
-    "MCP registration in ChatGPT remote connector"
+    "Complete GitHub draft PR and review",
+    "Link operational V5.7.5 code to a separate PRIVATE GitHub remote",
+    "Register MCP through an authorized ChatGPT connector/secure tunnel",
+    "Certify safe task assignment/restoration on 5/6 once their mixed historical contexts are reconciled"
   ],
-  "evidence": []
+  "evidence": [
+    {
+      "test": "python -m unittest discover -s tests -p test_*.py -q",
+      "result": "PASS",
+      "count": 17
+    },
+    {
+      "test": "python smoke_stdio.py",
+      "result": "PASS",
+      "tool_count": 11
+    },
+    {
+      "check": "GET /api/status after 6-layout",
+      "result": "PASS",
+      "panel_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "check": "sidecar PID 22416 + heartbeat",
+      "result": "PASS"
+    }
+  ]
 }
