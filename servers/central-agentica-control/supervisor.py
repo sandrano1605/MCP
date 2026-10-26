@@ -103,6 +103,24 @@ class Supervisor:
                 for row in changes:
                     item={"ts":snapshot["ts"],**row}
                     f.write(json.dumps(item,ensure_ascii=False)+"\n")
+            # Capture actionable fault transitions once, locally.
+            incident_codes={
+                "FAILED_TRANSPORT":"OTHER",
+                "TIMEOUT_UNCONFIRMED":"TIMEOUT_UNCONFIRMED",
+                "DOM_STALE":"DOM_UNAVAILABLE",
+                "NO_PROGRESS":"OTHER",
+                "LIMIT_REACHED":"CONTEXT_LIMIT",
+                "UNVERIFIED_CLOSE":"RESPONSE_UNVERIFIED"
+            }
+            for row in changes:
+                aid=str(row["agent"])
+                value=entries[aid]
+                before=(last.get("agents") or {}).get(aid) or {}
+                cls=value["classification"]
+                if cls in incident_codes and cls!=before.get("classification"):
+                    self.plane.record_issue(int(aid),incident_codes[cls],
+                        "Auto-detected category="+cls+"; phase="+str(value["phase"]) +
+                        "; iteration="+str(value["iteration"]))
         return snapshot
 
 def _single_instance_lock(path):
