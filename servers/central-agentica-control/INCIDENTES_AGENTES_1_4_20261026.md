@@ -34,3 +34,12 @@ Fuente: API local /api/status, /api/autosigue/status, /api/agent-health, CLI MCP
 - **A1/A2/A4:** paneles en línea y ejecución activa observada; esto no significa que su objetivo de negocio esté finalizado.
 - **A3:** panel conectado pero ejecución detenida en WAITING_SAFE_WORK. No se certifica reanudación hasta resolver la incertidumbre del transporte y la propiedad del borrador.
 - La modificación del supervisor queda **codificada y testeada**; su activación en el proceso lateral requiere verificación independiente de recarga y lectura posterior.
+
+## Cierre técnico del FIX-001 (comprobación posterior)
+
+- Archivo `supervisor.py` corregido en local y en la rama del PR #11.
+- Regresión local ejecutada después del cambio: **25/25 pruebas PASS**.
+- Se identificó por cmdline el proceso anterior del monitor (`supervisor.py --daemon --interval 60`), y se reemplazó **solo ese sidecar**, sin detener los agentes ni la GUI.
+- Nuevo proceso lateral **PID 44604**, comprobado `running` con el mismo intervalo de 60 segundos.
+- Lectura posterior de `cli.py monitor`: A1 ACTIVE iteración 11; A2 ACTIVE iteración 71; A3 TIMEOUT_UNCONFIRMED iteración 10; A4 ACTIVE iteración 24. RAM disponible 10.86 GB, CPU 22.4 %, presión NORMAL.
+- **Alcance del PASS:** clasificación y supervisión, no continuidad de A3 ni certificación de los releases empresariales. A3 conserva borrador y debe conciliarse.
