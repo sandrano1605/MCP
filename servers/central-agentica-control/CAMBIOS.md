@@ -24,6 +24,8 @@
 - Caso de error ChatGPT + timeout + borrador tras reload convertido en NO-GO obligatorio: no es ejecución recuperada.
 - Añadido `recovery_protocol_v576.py` y herramienta `central_recovery_diagnosis` en el MCP.
 - Añadidos 21 tests de regresión para identidad, streaming, borrador, timeout, cierre y no reenvío.
-- Batería total 46/46 PASS y humo MCP `stdio`: 13 herramientas, cuatro llamadas de lectura PASS.
+- Batería total 47/47 PASS y humo MCP `stdio`: 13 herramientas, cuatro llamadas de lectura PASS.
 - Plano de integración Qt/rollover transaccional y gates QAS en `UPGRADE_SOLO_SIGUE_V576.json`.
 - Sin cambios del código del proceso Qt V5.7.5 en uso; release V5.7.6 sigue **NO DESPLEGADO**.
+
+- Reincidencia tras una restauración inicialmente correcta: un agente avanzó a la iteración siguiente y volvió a timeout incierto. Se añadió gate de estabilidad multi-turno y prueba contra reintentos automáticos; V5.7.6 continúa pendiente de integración Qt.
