@@ -32,7 +32,8 @@
     "A5 verified project reassignment SOLO procedure documented with evidence",
     "A3 unknown-error/draft failure documented as preserved NO-GO",
     "Read-only V5.7.6 recovery diagnosis added to MCP and CLI",
-    "46 isolated unittest cases passing; MCP stdio 13 tools and 4 read-only calls passing"
+    "46 isolated unittest cases passing; MCP stdio 13 tools and 4 read-only calls passing",
+    "Recurrent post-restore timeout on A4 classified as uncertain delivery, with regression"
   ],
   "pending": [
     "Review/merge Github MCP PR #11 after code review",
@@ -47,12 +48,13 @@
     "Implement atomic Qt same-run restore under isolated V5.7.6 candidate",
     "Implement safe cross-project assignment/recovery in Qt with backup and delivery idempotency",
     "Integrate persisted draft+ACK reconciliation for ChatGPT unknown error/timeout",
-    "Pass QAS canary and rollback rehearsal before installing V5.7.6"
+    "Pass QAS canary and rollback rehearsal before installing V5.7.6",
+    "Fix recurring WAITING_SAFE_WORK after initially successful same-run recovery; never auto retry"
   ],
   "evidence": [
     {
       "test": "python -m unittest discover -s tests -p test_*.py -q",
-      "result": "46/46 PASS"
+      "result": "47/47 PASS"
     },
     {
       "test": "python smoke_stdio.py",
