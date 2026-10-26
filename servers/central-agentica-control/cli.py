@@ -19,7 +19,7 @@ from supervisor import Supervisor
 def main(argv=None):
     p=argparse.ArgumentParser()
     p.add_argument("command",choices=("status","monitor","agent","context",
-        "prepare-layout","prepare-start","prepare-restore","approve","record-incident","orchestrator-plan"))
+        "prepare-layout","prepare-start","prepare-restore","approve","record-incident","orchestrator-plan","recovery-diagnosis"))
     p.add_argument("arg1",nargs="?")
     p.add_argument("arg2",nargs="?")
     p.add_argument("arg3",nargs="?")
@@ -29,6 +29,7 @@ def main(argv=None):
         args=(opt.arg1,opt.arg2,opt.arg3)
         if opt.command=="status":v=cp.status()
         elif opt.command=="monitor":v=Supervisor(cp).poll()
+        elif opt.command=="recovery-diagnosis":v=cp.recovery_diagnosis(args[0])
         elif opt.command=="orchestrator-plan":v=cp.orchestrator_plan()
         elif opt.command=="agent":v=cp.agent(args[0],detail=True)
         elif opt.command=="context":v=cp.context(args[0])
