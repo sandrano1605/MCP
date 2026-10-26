@@ -37,6 +37,11 @@ def build_server(plane=None):
         return safe(lambda:ctrl.context(agent_id))
 
     @mcp.tool()
+    def central_orchestrator_plan()->dict:
+        """Read-only contextual plan for all six agents; never resends."""
+        return safe(ctrl.orchestrator_plan)
+
+    @mcp.tool()
     def central_monitor_once()->dict:
         """Read six-agent progress, completion certification and incidents."""
         return safe(lambda:Supervisor(ctrl).poll())
