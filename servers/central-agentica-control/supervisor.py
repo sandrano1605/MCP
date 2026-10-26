@@ -116,7 +116,7 @@ class Supervisor:
                 "FAILED_TRANSPORT":"OTHER",
                 "TIMEOUT_UNCONFIRMED":"TIMEOUT_UNCONFIRMED",
                 "DOM_STALE":"DOM_UNAVAILABLE",
-                "NO_PROGRESS":"OTHER",
+                "NO_PROGRESS":"NO_PROGRESS",
                 "LIMIT_REACHED":"CONTEXT_LIMIT",
                 "UNVERIFIED_CLOSE":"RESPONSE_UNVERIFIED",
                 "CHATGPT_ERROR":"RESPONSE_UNVERIFIED",
