@@ -340,6 +340,55 @@ class Plane:
           "action":action,"agent":aid,
           "http_status":response.get("status"),"must_verify":True}
 
+    def orchestrator_plan(self):
+        """Read-only coordination plan across 1..6, no implicit send or approval."""
+        live=self.status()
+        rows=[]
+        safe_terminal={"TIME_LIMIT","SEND_LIMIT","Detenido por el usuario"}
+        for aid in range(1,MAX_AGENTS+1):
+            info=live["agents"][str(aid)]
+            if not info["mounted"]:
+                rows.append({"agent":aid,"action":"MOUNT_PANEL_FIRST",
+                    "reason":"No WebView; approved six-panel layout is required"})
+                continue
+            if info["active"]:
+                rows.append({"agent":aid,"action":"MONITOR_EXISTING_RUN",
+                    "run_id":info["run_id"],"iteration":info["iteration"],
+                    "phase":info["phase"]})
+                continue
+            if info["transport_failed"] or info["queue"] or info["transport_pending"]:
+                rows.append({"agent":aid,"action":"RECONCILE_TRANSPORT_FIRST"})
+                continue
+            try:
+                d=self._fresh(aid)
+                choices=[r for r in self.context(aid)["runs"] if r["url"]==d.get("url")]
+            except Refused:
+                rows.append({"agent":aid,"action":"INSPECT_AUTH_OR_CONVERSATION"})
+                continue
+            if not d.get("ready") or d.get("isGenerating") or d.get("draft"):
+                rows.append({"agent":aid,"action":"PRESERVE_EDITOR_OR_STREAM"})
+                continue
+            if not (d.get("finalized") and d.get("lastAssistantAfterLastUser")):
+                rows.append({"agent":aid,"action":"VERIFY_FINAL_REPLY_FIRST"})
+                continue
+            if not choices:
+                rows.append({"agent":aid,"action":"ASSIGN_PROJECT_CONTEXT_FIRST"})
+                continue
+            old=choices[0]
+            if old["db_state"] not in safe_terminal:
+                rows.append({"agent":aid,"action":"RECONCILE_PREVIOUS_RUN",
+                    "previous_db_state":old["db_state"],"run_id":old["run_id"]})
+            elif old["checkpoint"].get("status")!="working" or not (
+                   old["checkpoint"].get("safe_next_steps") or old["checkpoint"].get("pending")):
+                rows.append({"agent":aid,"action":"VERIFY_PENDING_TASKS"})
+            else:
+                rows.append({"agent":aid,"action":"PLAN_CONTEXTUAL_SOLO_START",
+                    "previous_run_id":old["run_id"],"pending_count":len(
+                        old["checkpoint"].get("pending") or [])})
+        return {"status":"READ_ONLY_PLAN","agents":rows,
+                "state_changes":False,
+                "policy":"No auto-send: prepare and approve each safe transition"}
+
     def record_issue(self,aid,code,evidence):
         aid=validate_agent(aid)
         allowed={"DOM_UNAVAILABLE","DRAFT_CHANGED","TIMEOUT_UNCONFIRMED",
