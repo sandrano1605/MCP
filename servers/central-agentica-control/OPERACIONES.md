@@ -28,6 +28,10 @@ Nunca cerrar por porcentaje o señal visual; exigir `done` con evidencia y pendi
 ## G. Recuperación de incidentes
 `central_record_incident` registra el fallo localmente, y `central_continuous_improvement` propone pruebas específicas. Registrar `action/outcome/evidence` antes de afirmar reparación. No reintentar un `POST` con resultado incierto.
 
-## H. Control Git
+## H. Decisión central de seis agentes
+
+`python cli.py orchestrator-plan` inspecciona las seis ejecuciones y su memoria local y decide MONITOR_EXISTING_RUN, PLAN_CONTEXTUAL_SOLO_START o RECONCILE_PREVIOUS_RUN sin hacer envíos. La ejecución real sigue requiriendo `prepare` + aprobación + verificación.
+
+## I. Control Git
 Solo versionar código/test/doc sin tokens, cookies, sesiones, dumps o historiales de conversación.
 No hacer push del perfil activo. Validar `git status` antes de cualquier commit. Mantener respaldo independiente del SQLite.
