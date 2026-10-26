@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "date": "2026-10-26",
   "scope": "6 agentes, Sigue/SOLO, recuperacion verificada, monitor, mejora continua",
-  "status": "LOCAL_MCP_12_TOOLS_VERIFIED_24_TESTS_PASS_SIX_MONITORED",
+  "status": "A1_A2_A4_ACTIVE_A3_SAFE_WAIT_MONITOR_P44604_FIX001_TESTED",
   "constraints": [
     "No automatic resend of uncertain sends",
     "No SAP COMMIT",
@@ -24,7 +24,10 @@
     "Read-only and safety tests: 24/24 PASS",
     "MCP real stdio discovery 12 tools and three read-only calls PASS",
     "Supervisor health now detects CHATGPT_ERROR / NO_TELEMETRY / NO_PROGRESS (verified against live agent error)",
-    "Independent supervisor PID 40364 running at 60-second cadence with current heartbeat"
+    "26-10-2026: reviewed A1-A4 via live API, checkpoints and DOM; A1 A2 A4 progressing; A3 unresolved timeout with draft",
+    "FIX-001 live slow-stream classification corrected (LENTO + generating = ACTIVE); local unit tests 25/25 PASS",
+    "Independent supervisor safely replaced by PID 44604 (60 sec) and verified running; agents and GUI preserved",
+    "RCA, safe actions and planned fixes committed to branch and PR #11"
   ],
   "pending": [
     "Review/merge Github MCP PR #11 after code review",
@@ -33,7 +36,9 @@
     "Install user-logon autostart if approved",
     "Certify recovery under actual interruption in a disposable QAS test",
     "Reconcile A6 previous RESPONSE_TIMEOUT_UNCONFIRMED; no resend until final confirmation",
-    "A3 has a ChatGPT UI error and preserved draft; A4 has uncertain timeout during conversation rollover; investigate without retry or bypass"
+    "FIX-002 A3: reconcile RESPONSE_TIMEOUT_UNCONFIRMED + persistent draft with owned final checkpoint before any send",
+    "FIX-003 A4: safely activate/certify protected GET for QAS exception matrix (HTTP 405) with no SAP writes",
+    "FIX-004: detect sustained no-progress using DOM signature and time, deduplicating incidents"
   ],
   "evidence": [
     {
@@ -58,8 +63,21 @@
     },
     {
       "check": "watcher",
-      "pid": 40364,
-      "result": "running; heartbeat recent"
+      "pid": 44604,
+      "result": "running, --daemon --interval 60"
+    },
+    {
+      "test": "python -m unittest discover -s tests -p test_*.py -v",
+      "result": "25/25 PASS"
+    },
+    {
+      "check": "live A1-A4 after FIX-001",
+      "result": "A1 active 11/100, A2 active 71/100, A3 timeout uncertain 10/100, A4 active 24/100"
+    },
+    {
+      "check": "incident report",
+      "path": "INCIDENTES_AGENTES_1_4_20261026.md",
+      "result": "committed and linked in PR #11"
     }
   ],
   "git": {
