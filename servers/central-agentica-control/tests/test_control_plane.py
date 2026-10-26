@@ -153,6 +153,17 @@ class PlaneTests(unittest.TestCase):
         sup=Supervisor(self.plane)
         self.assertEqual(len(sup.poll()["material_changes"]),6)
         self.assertEqual(sup.poll()["material_changes"],[])
+    def test_auto_incident_captured_once_on_change(self):
+        self.api.health["4"]["label"]="LENTO"
+        self.api.follow["4"].update(is_active=True,phase="RESPONSE")
+        sup=Supervisor(self.plane)
+        first=sup.poll()
+        self.assertEqual(first["agents"]["4"]["classification"],"NO_PROGRESS")
+        n=len(self.plane.issues_file.read_text(encoding="utf8").splitlines())
+        self.assertGreaterEqual(n,1)
+        sup.poll()
+        self.assertEqual(len(self.plane.issues_file.read_text(encoding="utf8").splitlines()),n)
+
     def test_mcp_import(self):
         from server import build_server
         m=build_server(self.plane)
