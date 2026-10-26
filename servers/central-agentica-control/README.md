@@ -82,5 +82,5 @@ la función SOLO/Sígueme. La nueva herramienta de consulta
 `central_recovery_diagnosis(agent_id)` (CLI: `python cli.py recovery-diagnosis 3`)
 clasifica bloqueos sin reenviar mensajes ni alterar la sesión.
 
-**Importante:** módulo de decisión comprobado con 46 tests y humo MCP de 13 herramientas;
+**Importante:** módulo de decisión comprobado con 47 tests y humo MCP de 13 herramientas;
 la integración automática Qt en V5.7.6 **aún no está desplegada**.
