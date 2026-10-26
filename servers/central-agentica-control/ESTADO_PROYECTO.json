@@ -1,0 +1,26 @@
+{
+  "name": "Central Agentica MCP Orquestador",
+  "version": "0.1.0",
+  "date": "2026-10-26",
+  "scope": "6 agentes, Sigue/SOLO, recuperacion verificada, monitor, mejora continua",
+  "status": "testing",
+  "constraints": [
+    "No automatic resend of uncertain sends",
+    "No SAP COMMIT",
+    "No PRD writes",
+    "No secrets or chats in Git",
+    "Two-stage mutations"
+  ],
+  "completed": [
+    "GitHub inventory inspected",
+    "MCP/CLI/supervisor source created",
+    "Unit tests created"
+  ],
+  "pending": [
+    "Regression pass",
+    "Live 6-panel smoke test",
+    "GitHub branch commit",
+    "MCP registration in ChatGPT remote connector"
+  ],
+  "evidence": []
+}
