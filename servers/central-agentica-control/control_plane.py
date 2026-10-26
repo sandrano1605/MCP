@@ -340,6 +340,54 @@ class Plane:
           "action":action,"agent":aid,
           "http_status":response.get("status"),"must_verify":True}
 
+    def recovery_diagnosis(self,aid):
+        """Read-only SOLO/Sígueme preflight, no prompt submission or browser editing.
+
+        This V5.7.6 decision contract remains advisory until promoted by tests.
+        """
+        import re
+        from urllib.parse import urlsplit
+        from recovery_protocol_v576 import decide,verified_checkpoint
+        aid=validate_agent(aid)
+        a=self.status()["agents"][str(aid)]
+        d=None
+        if a["mounted"]:
+            try:d=self._fresh(aid)
+            except Refused:pass
+        saved=read_json(self.task/"recovery_runs_v575.json").get("agents",{}).get(str(aid))
+        if not isinstance(saved,dict):saved=None
+        rid=a.get("run_id") or ((saved or {}).get("run_id"))
+        db_state=None
+        if rid:
+            try:
+                with self._db() as db:
+                    row=db.execute("SELECT state FROM runs WHERE id=?",(rid,)).fetchone()
+                    db_state=row[0] if row else None
+            except (sqlite3.Error,Refused):
+                pass
+        def project(url):
+            try:
+                path=urlsplit(url).path
+                m=re.search(r"/g/(g-p-[0-9a-fA-F]{32})",path)
+                return m.group(1).lower() if m else None
+            except (TypeError,ValueError):
+                return None
+        ref=(saved or {}).get("expected_url")
+        cur=d.get("url") if d else None
+        old=project(ref)
+        fresh=project(cur)
+        same_project=not (old and fresh and old!=fresh)
+        cp=verified_checkpoint((d or {}).get("text",""),str(rid or ""))
+        output=decide(agent_id=aid,controller=a,dom=d,db_state=db_state,
+                      checkpoint=cp,saved=saved,project_matches=same_project)
+        return {"agent":aid,"run_id":rid,"phase":a["phase"],
+          "health":a["health"],"db_state":db_state,
+          "chat_ready":bool(d and d.get("ready")),
+          "draft_chars":len((d or {}).get("draft") or ""),
+          "checkpoint_status":cp.get("status") if cp else None,
+          "same_project":same_project,"decision":output,
+          "release_target":"V5.7.6","mutations":0}
+
     def orchestrator_plan(self):
         """Read-only coordination plan across 1..6, no implicit send or approval."""
         live=self.status()
