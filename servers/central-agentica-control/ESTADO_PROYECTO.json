@@ -1,9 +1,9 @@
 {
   "name": "Central Agentica MCP Orquestador",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "date": "2026-10-26",
   "scope": "6 agentes, Sigue/SOLO, recuperacion verificada, monitor, mejora continua",
-  "status": "MCP_VERIFIED_12_TOOLS_6_PANELS_5_SOLO_ACTIVE_A6_SAFE_HALT",
+  "status": "LOCAL_MCP_12_TOOLS_VERIFIED_24_TESTS_PASS_SIX_MONITORED",
   "constraints": [
     "No automatic resend of uncertain sends",
     "No SAP COMMIT",
@@ -14,14 +14,17 @@
   "completed": [
     "Reviewed GitHub repositories and existing MCP windows-capture implementation",
     "Implemented MCP stdio server, CLI, supervisor and improvement playbooks",
-    "21/21 isolated unit tests PASS",
     "MCP stdio handshake real live: 12 tools + 3 readonly calls PASS",
     "Six panels enabled in Central Agentica V5.7.5; old run IDs 1-4 preserved",
     "Independent monitor PID 15840 running, 60-second poll and heartbeat verified",
     "Source files and docs committed to GitHub MCP draft PR #11",
     "High-level context-aware orchestrator plan detects safe Solo A5 and uncertain A6",
     "Started agent 5 SOLO from verified TIME_LIMIT checkpoint; confirmed RESPONSE/1 iteration and no error",
-    "Consolidated ChatGPT hourly monitoring into one six-agent watch (three duplicate A1/A2 watches disabled)"
+    "Consolidated ChatGPT hourly monitoring into one six-agent watch (three duplicate A1/A2 watches disabled)",
+    "Read-only and safety tests: 24/24 PASS",
+    "MCP real stdio discovery 12 tools and three read-only calls PASS",
+    "Supervisor health now detects CHATGPT_ERROR / NO_TELEMETRY / NO_PROGRESS (verified against live agent error)",
+    "Independent supervisor PID 40364 running at 60-second cadence with current heartbeat"
   ],
   "pending": [
     "Review/merge Github MCP PR #11 after code review",
@@ -29,29 +32,34 @@
     "Register MCP as ChatGPT private connector or configure secure supported tunnel",
     "Install user-logon autostart if approved",
     "Certify recovery under actual interruption in a disposable QAS test",
-    "Reconcile A6 previous RESPONSE_TIMEOUT_UNCONFIRMED; no resend until final confirmation"
+    "Reconcile A6 previous RESPONSE_TIMEOUT_UNCONFIRMED; no resend until final confirmation",
+    "A3 has a ChatGPT UI error and preserved draft; A4 has uncertain timeout during conversation rollover; investigate without retry or bypass"
   ],
   "evidence": [
     {
-      "test": "unittest discover",
-      "result": "21/21 PASS"
+      "test": "python -m unittest discover -s tests -p test_*.py -q",
+      "result": "24/24 PASS"
     },
     {
-      "test": "MCP stdio smoke",
-      "result": "12 tools + 3 readonly calls PASS"
+      "test": "python smoke_stdio.py",
+      "result": "MCP stdio PASS, 12 tools, 3 read calls"
     },
     {
-      "test": "6-panel layout",
-      "result": "mounted 1,2,3,4,5,6"
+      "check": "AF9328 API",
+      "result": "PASS",
+      "panels": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
     },
     {
-      "test": "watcher",
-      "pid": 15840,
-      "result": "running"
-    },
-    {
-      "test": "orchestrator-plan and contextual start",
-      "result": "A5 activated 1/100; A6 deferred unsafe"
+      "check": "watcher",
+      "pid": 40364,
+      "result": "running; heartbeat recent"
     }
   ],
   "git": {
