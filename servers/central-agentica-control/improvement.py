@@ -10,6 +10,9 @@ import json
 from control_plane import Plane, Refused
 
 PLAYBOOK = {
+ "NO_PROGRESS":{"diagnosis":"Check last DOM progress, response finalization, connectivity and renderer age",
+                     "test":"test_no_progress_distinct_from_failed_delivery",
+                     "policy":"Observe and reconcile; do not resend or kill live agent"},
  "DOM_UNAVAILABLE":{"diagnosis":"Inspect Qt renderer and DOM freshness",
                      "test":"test_dom_loss_no_duplicate_send",
                      "policy":"Pause, preserve turn; do not Retry"},
