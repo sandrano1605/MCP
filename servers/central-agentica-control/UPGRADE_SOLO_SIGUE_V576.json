@@ -29,6 +29,12 @@
       "status": "REPRODUCED_BLOCKED_CORRECTLY",
       "action": "preserve draft after single reload and DB backup; never Retry",
       "next_release_gate": "ledger reconciliation + no automatic send when delivery is uncertain"
+    },
+    {
+      "case": "POST_RESTORE_RECURRENCE",
+      "status": "OBSERVED_ON_LIVE_CONTROLLER",
+      "action": "A verified restore reached WAITING, then a later iteration returned WAITING_SAFE_WORK / RESPONSE_TIMEOUT_UNCONFIRMED; preserve run_id, do not retry",
+      "next_release_gate": "Multi-iteration durable recovery, ledger reconciliation and regression under repeated timeout"
     }
   ],
   "safety_invariants": [
@@ -43,7 +49,7 @@
     {
       "type": "isolated_regression",
       "status": "PASS",
-      "tests": 46
+      "tests": 47
     },
     {
       "type": "live_mcp_stdio",
@@ -68,6 +74,7 @@
     "Deduplicated delivery journal across browser reload and project rollover",
     "Integration tests: same run, wrong project, duplicate, draft, unknown-error retry, ACK timeout, Qt crash/reload",
     "QAS canary and rollback rehearsal",
-    "Publish package version and append actual PASS evidence only after tests"
+    "Publish package version and append actual PASS evidence only after tests",
+    "Recurrent post-restore timeout 24th turn: never assume first successful resume proves long-term recovery"
   ]
 }
