@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "feature": "SOLO_SIGUE_VERIFIED_HAPPY_PATH",
+  "target_release": "Central Agentica V5.7.6",
+  "current_installed_app": "V5.7.5-recovery-candidate",
+  "status": "SPEC_TESTED__QT_INTEGRATION_NOT_DEPLOYED",
+  "created_at": "2026-10-26",
+  "component": "recovery_protocol_v576.py",
+  "cli": "python cli.py recovery-diagnosis <agent_id>",
+  "mcp_tool": "central_recovery_diagnosis",
+  "test": "python -m unittest discover -s tests -p test_*.py -q",
+  "max_agents": 6,
+  "user_goal": "Persist proven happy paths and automatically consider verified recovery gates in future SOLO/Sigue upgrades",
+  "behaviors": [
+    {
+      "case": "SAME_RUN_RESTORE",
+      "status": "MANUAL_EXECUTION_VERIFIED",
+      "action": "validated checkpoint, same run, no re-send; Qt integration pending",
+      "next_release_gate": "atomic Qt resume API with proven idempotence"
+    },
+    {
+      "case": "CONTEXTUAL_PROJECT_REASSIGN",
+      "status": "MANUAL_EXECUTION_VERIFIED",
+      "action": "preserve old run, confirm target project chat, start SOLO in new run with context",
+      "next_release_gate": "two-phase project-switch API / exact target verification"
+    },
+    {
+      "case": "ERROR_TIMEOUT_DRAFT",
+      "status": "REPRODUCED_BLOCKED_CORRECTLY",
+      "action": "preserve draft after single reload and DB backup; never Retry",
+      "next_release_gate": "ledger reconciliation + no automatic send when delivery is uncertain"
+    },
+    {
+      "case": "POST_RESTORE_RECURRENCE",
+      "status": "OBSERVED_ON_LIVE_CONTROLLER",
+      "action": "A verified restore reached WAITING, then a later iteration returned WAITING_SAFE_WORK / RESPONSE_TIMEOUT_UNCONFIRMED; preserve run_id, do not retry",
+      "next_release_gate": "Multi-iteration durable recovery, ledger reconciliation and regression under repeated timeout"
+    }
+  ],
+  "safety_invariants": [
+    "Never attempt Retry or a second POST for an uncertain send",
+    "Never erase external drafts or silently alter project identity",
+    "Never mark a controller as working based only on an is_active flag",
+    "Never certify DONE without owned final checkpoint plus evidence and empty pending",
+    "Never perform SAP COMMIT or bypass production authorization",
+    "No cross-project restoration of prior run_id"
+  ],
+  "evidence": [
+    {
+      "type": "isolated_regression",
+      "status": "PASS",
+      "tests": 47
+    },
+    {
+      "type": "live_mcp_stdio",
+      "status": "PASS",
+      "tools": 13,
+      "read_calls": 3
+    },
+    {
+      "type": "live_diagnosis",
+      "agent3": "PRESERVE_DRAFT",
+      "agent4": "OBSERVE_STREAM",
+      "agent5": "OBSERVE_STREAM"
+    },
+    {
+      "type": "live_safeguard",
+      "agent3": "No duplicate send after uncertain timeout"
+    }
+  ],
+  "pending_gates": [
+    "Implement within isolated Qt candidate V5.7.6, never modify running app process",
+    "Atomic verified restore that does not require direct SQLite state manipulation",
+    "Deduplicated delivery journal across browser reload and project rollover",
+    "Integration tests: same run, wrong project, duplicate, draft, unknown-error retry, ACK timeout, Qt crash/reload",
+    "QAS canary and rollback rehearsal",
+    "Publish package version and append actual PASS evidence only after tests",
+    "Recurrent post-restore timeout 24th turn: never assume first successful resume proves long-term recovery"
+  ]
+}

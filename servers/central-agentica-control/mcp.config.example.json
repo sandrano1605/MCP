@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "central-agentica-orchestrator": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["C:/path/to/Central_Agentica_Control_MCP/server.py"],
+      "env": {
+        "CENTRAL_AGENTICA_APP_ROOT": "C:/path/to/Central_Agentica_V575_RECOVERY_CANDIDATE"
+      }
+    }
+  }
+}

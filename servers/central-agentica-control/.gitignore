@@ -1,0 +1,23 @@
+# No operational data, profiles or secrets
+__pycache__/
+*.py[cod]
+*.sqlite*
+*.db
+*.db-*
+*.jsonl
+*.log
+*.bak
+*.tmp
+.env*
+**/Cookies
+**/Web Data
+**/Login Data
+**/persistent_session/**
+**/recovery_runs*.json
+**/pending_actions.json
+**/task_memory*.sqlite*
+**/incidents.json
+.vscode/
+.idea/
+venv/
+.venv/
