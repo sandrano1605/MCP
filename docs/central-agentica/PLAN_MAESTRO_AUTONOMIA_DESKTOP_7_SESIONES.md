@@ -11,6 +11,13 @@
 - **Canary offline V5.7.7:** 6 trabajadores + séptimo panel orquestador y temporizador de recuperación observados, WebViews desconectadas de internet, almacenamiento aislado. 7/7 pruebas de aislamiento PASS. **NO es prueba de login, Sígueme ni recuperación E2E**.
 - La versión LAB se conserva en un repositorio **Git local independiente** sin remoto; no publicar el código operativo ni los datos privados del desktop en el repositorio público de MCP.
 
+## Congelamiento CA-02 — V5.7.8-LAB (30-10-2026)
+
+- **Issue #14 cerrado** con ledger SQLite transaccional; **98 pruebas automatizadas PASS** y canary Qt offline PASS_CORE. Commit Git **local** `1ec5d0c`, etiqueta `v5.7.8-lab-ca02`. Sin publicación de código privado.
+- La aplicación LAB está expresamente en estado **NO_GO para lanzamiento/promoción**: `launch_v578_lab.py --start-lab` retorna 24 con `NO_GO_RELEASE_GATE`. Solo preflight y pruebas offline permitidas; **V5.7.6 sigue operativa**.
+- **Regla de promoción:** No reemplazar V5.7.6 hasta aprobar los issues CA-03–CA-10 y demostrar en el mismo escenario 7/7 sesiones restaurables, handoffs con contexto, Sígueme por objetivo, recuperación sin duplicados, Orquestador operativo, MCP protegido, soak E2E y métricas comparativamente mejores de RAM/CPU/latencia.
+- Los estados de agente y backups privados de V5.7.6 nunca se trasladan por coincidencias parciales. La siguiente iteración se desarrolla en **V5.7.9-LAB** separada, no modificando carpetas anteriores.
+
 ## 1. Visión y contrato funcional
 Central Agéntica debe mantener **7 sesiones ChatGPT autónomas y separadas**: trabajadores A1–A6 más Orquestador 7. El supervisor Python mantiene las sesiones bajo control, preserva el progreso incluso entre conversaciones cortas, reinicia solamente después de reconciliar la última actividad y no transforma un fallo incierto en un envío duplicado. El control puede venir de la interfaz o de un **MCP dedicado** y privado.
 
