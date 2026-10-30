@@ -3,6 +3,14 @@
 **Épica:** https://github.com/sandrano1605/MCP/issues/12
 **Despliegue objetivo:** aplicación de escritorio Windows autorizada. **VPS/cloud fuera de alcance** de esta entrega.
 
+## Política de versiones aisladas (acordada en CA-01, 30-10-2026)
+
+- **V5.7.6 actual:** entorno de trabajo existente, no se modifica, no se reinicia y conserva las conversaciones/autorizaciones originales.
+- **V5.7.7-LAB:** primer clon de código en directorio independiente, sin copiar cookies, SQLite, perfiles ni checkpoints. Instancia **9**, API **8798**, `LOCALAPPDATA`/perfil bajo el directorio privado del LAB. Se inicia solo con `launch_v577_lab.py`; requiere login separado si más adelante se autoriza una prueba web.
+- **V5.7.8-LAB y posteriores:** una nueva versión por iteración validada; nunca sobrescribir el origen. Se promociona solamente con evidencia, backup y rollback.
+- **Canary offline V5.7.7:** 6 trabajadores + séptimo panel orquestador y temporizador de recuperación observados, WebViews desconectadas de internet, almacenamiento aislado. 7/7 pruebas de aislamiento PASS. **NO es prueba de login, Sígueme ni recuperación E2E**.
+- La versión LAB se conserva en un repositorio **Git local independiente** sin remoto; no publicar el código operativo ni los datos privados del desktop en el repositorio público de MCP.
+
 ## 1. Visión y contrato funcional
 Central Agéntica debe mantener **7 sesiones ChatGPT autónomas y separadas**: trabajadores A1–A6 más Orquestador 7. El supervisor Python mantiene las sesiones bajo control, preserva el progreso incluso entre conversaciones cortas, reinicia solamente después de reconciliar la última actividad y no transforma un fallo incierto en un envío duplicado. El control puede venir de la interfaz o de un **MCP dedicado** y privado.
 
