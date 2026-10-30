@@ -1,6 +1,6 @@
 # Plan maestro V6.0 — Central Agéntica Desktop · 7 sesiones persistentes
-**Actualización:** 30-10-2026 · **Estado:** PLANIFICADO / IMPLEMENTACIÓN AÚN NO CERTIFICADA  
-**Épica:** https://github.com/sandrano1605/MCP/issues/12  
+**Actualización:** 30-10-2026 · **Estado:** PLANIFICADO / IMPLEMENTACIÓN AÚN NO CERTIFICADA
+**Épica:** https://github.com/sandrano1605/MCP/issues/12
 **Despliegue objetivo:** aplicación de escritorio Windows autorizada. **VPS/cloud fuera de alcance** de esta entrega.
 
 ## 1. Visión y contrato funcional
@@ -90,10 +90,10 @@ Guardar **agent_id + project_id + conversation_id + logical_run_id + chat_sequen
 8. Evidencias PASS para suite offline, integración Qt, E2E, backups, rollback; ante FAIL, estado NO_GO / NOT_CERTIFIED.
 
 ## 6. Método de trabajo (sprints y change control)
-**Sprint 0 — CA-01:** inventario, baseline, diff/backup, mapa de dependencias, snapshot del runtime y de tests.  
-**Sprint 1 — CA-02 y CA-03:** ledger y ciclo de vida de siete sesiones.  
-**Sprint 2 — CA-04 a CA-06:** rollover, SOLO objetivo y recuperación idempotente.  
-**Sprint 3 — CA-07 y CA-08:** Orquestador, watchdog y MCP/plugin.  
+**Sprint 0 — CA-01:** inventario, baseline, diff/backup, mapa de dependencias, snapshot del runtime y de tests.
+**Sprint 1 — CA-02 y CA-03:** ledger y ciclo de vida de siete sesiones.
+**Sprint 2 — CA-04 a CA-06:** rollover, SOLO objetivo y recuperación idempotente.
+**Sprint 3 — CA-07 y CA-08:** Orquestador, watchdog y MCP/plugin.
 **Sprint 4 — CA-09 y CA-10:** benchmark, resiliencia, E2E/canary y release.
 
 Cada issue: **Diagnóstico → diseño mínimo → fix aislado → unit tests → integración → evidencia real → revisión seguridad → commit selectivo → verificación de despliegue**. No confundir un commit local con GitHub publicado.
